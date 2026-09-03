@@ -20,7 +20,9 @@ pub struct EventError {
 }
 
 impl fmt::Display for EventError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str(&self.message) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
 }
 impl Error for EventError {}
 
