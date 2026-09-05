@@ -10,4 +10,4 @@ repository = "https://github.com/IlleNilsson/xmip-core-event"
 description = "External Xmip Event model and delivery contract."
 
 [dependencies]
-xmip-core = { git = "https://github.com/IlleNilsson/xmip-core", branch = "main" }
+xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main" }

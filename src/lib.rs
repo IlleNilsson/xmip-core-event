@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
-use xmip_core::{JourneyId, MessageId, PartyId};
+use xcore::{JourneyId, MessageId, PartyId};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Event {
