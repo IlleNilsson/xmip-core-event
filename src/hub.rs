@@ -24,7 +24,7 @@ use std::time::Duration;
 use authorize::Authorizer;
 use xcore::Severity;
 
-use crate::audit_queue::{Deliveries, described, record, settle};
+use crate::audit_trail::{Deliveries, described, record};
 use crate::filter::Filter;
 use crate::subscriber::{SameProcess, Subscriber};
 use crate::{Event, EventError};
@@ -286,7 +286,8 @@ impl Drop for Subscription {
             "closed",
             about,
         );
-        // A program that unsubscribed and exits has lost no record.
-        settle();
+        // Handed to the keeper, never waited for here: the dropping thread
+        // is the program's, and a disk is not its business. The program's
+        // next direct record — its stop — is kept after this one.
     }
 }

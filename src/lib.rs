@@ -25,7 +25,7 @@
 //! The C boundary is `xmip_operate.h` section 11, forwarded by the
 //! runtime's library to [`hub::Hub::process`]; every language binds that.
 
-pub mod audit_queue;
+mod audit_trail;
 pub mod binding;
 pub mod filter;
 pub mod forward;
@@ -39,7 +39,10 @@ pub mod wire;
 use std::collections::BTreeMap;
 
 use node::Stage;
-use xcore::{EventId, IdGenerator, JourneyId, MessageId, PartyId, StreamId, UuidV7Generator};
+use xcore::{
+    Clock, EventId, IdGenerator, JourneyId, MessageId, PartyId, StreamId, SystemClock,
+    UuidV7Generator,
+};
 
 use crate::outcome::Outcome;
 
@@ -104,7 +107,7 @@ impl Event {
         Self {
             id: EventId::new(UuidV7Generator.next_u128()),
             kind: kind.into(),
-            time_unix_nanos: subscriber::now(),
+            time_unix_nanos: SystemClock.unix_timestamp_nanos(),
             action,
             outcome,
             scope: scope.into(),

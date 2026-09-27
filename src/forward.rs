@@ -16,11 +16,11 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
-use resilience::{Failure, Guard, Guarded, execute};
-use xcore::{PartyId, Severity};
+use resilience::{Guard, Guarded, execute};
+use xcore::{Failure, PartyId, Severity};
 
 use crate::Event;
-use crate::audit_queue::record;
+use crate::audit_trail::record;
 use crate::binding::{Binding, Carried, Mode};
 use crate::hub::Subscription;
 use crate::wire::WireEvent;
@@ -114,7 +114,7 @@ impl<W: Wire> Forwarder<W> {
             Ok(Guarded::Done(())) => Ok(()),
             Ok(Guarded::Refused(reason)) => Err(reason),
             Ok(Guarded::Fallback) => Err("a guard asked for the fallback".to_string()),
-            Err(failure) => Err(failure.reason),
+            Err(failure) => Err(failure.message),
         }
     }
 

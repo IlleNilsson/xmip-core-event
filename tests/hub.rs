@@ -10,11 +10,11 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use audit::keeper::settle;
 use audit::program_audit::ProgramAudit;
 use node::Stage;
 use xcore::PartyId;
 use xmip_core_event::Event;
-use xmip_core_event::audit_queue::settle;
 use xmip_core_event::filter::Filter;
 use xmip_core_event::hub::Hub;
 use xmip_core_event::outcome::Outcome;
