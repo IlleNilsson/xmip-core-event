@@ -7,13 +7,13 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use audit::keeper::settle;
 use audit::program_audit::ProgramAudit;
 use node::Stage;
-use resilience::{Failure, Guard};
+use resilience::Guard;
 use retry::Retry;
-use xcore::PartyId;
+use xcore::{Failure, PartyId};
 use xmip_core_event::Event;
-use xmip_core_event::audit_queue::settle;
 use xmip_core_event::binding::{Binding, Carried, Mode};
 use xmip_core_event::filter::Filter;
 use xmip_core_event::forward::{Forwarder, Wire};

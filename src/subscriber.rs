@@ -16,12 +16,10 @@
 //! [`SameProcess`] is the policy that admits exactly that and has no opinion
 //! on anything else.
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use audit::program_audit::ProgramAudit;
 use authorize::{Action, Attempt, Authorizer, Decision, authorize};
 use context::{Alignment, AuthenticatedIdentity, IdentityFacts, OnMisalignment, Verified};
-use xcore::{Established, Layer, PartyId, mechanism};
+use xcore::{Clock, Established, Layer, PartyId, SystemClock, mechanism};
 
 use crate::filter::Filter;
 
@@ -57,7 +55,7 @@ impl Subscriber {
             Established::Passed,
             Verified::Proven,
         )
-        .at(now())
+        .at(SystemClock.unix_timestamp_nanos())
         .resolving_to(party);
 
         Self::new(
@@ -72,7 +70,8 @@ impl Subscriber {
     /// allowed at the scope it reaches.
     #[must_use]
     pub fn authorized(&self, filter: &Filter, policies: &[&dyn Authorizer]) -> Decision {
-        let asked = Attempt::new(Action::Send, filter.reach()).at(now());
+        let asked =
+            Attempt::new(Action::Send, filter.reach()).at(SystemClock.unix_timestamp_nanos());
         let attempts: Vec<Attempt> = if filter.types.is_empty() {
             vec![asked]
         } else {
@@ -119,13 +118,6 @@ impl Authorizer for SameProcess {
 /// This process, as a `peer-credentials` value names one.
 fn this_process() -> String {
     format!("process {}", std::process::id())
-}
-
-/// Nanoseconds since the epoch.
-pub(crate) fn now() -> i128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since| i128::try_from(since.as_nanos()).unwrap_or(0))
 }
 
 #[cfg(test)]

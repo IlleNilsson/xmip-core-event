@@ -46,8 +46,10 @@ be told. Delivery is not in the message path and no Journey waits for it.
   http, kafka and amqp transports each implement one — at least once, in
   order, each attempt judged by the resilience guards.
 - **Audited.** Every subscription, delivery, refusal and forward is recorded
-  in the subscriber's program audit (ADR-0062), handed to one keeping thread
-  (`audit_queue`) so no Event waits for a disk; unsubscribing settles it.
+  in the subscriber's program audit (ADR-0062), handed to the audit
+  capability's keeper (`audit::keeper`) so no Event waits for a disk and
+  unsubscribing never does either; the program's next direct record — its
+  stop — is kept after them.
 
 ## Near real time
 
