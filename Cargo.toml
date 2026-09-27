@@ -7,7 +7,46 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/IlleNilsson/xmip-core-event"
-description = "External Xmip Event model and delivery contract."
+description = "The Xmip Event, the one subscription rule, the in-process hub that delivers it, and the wire event that carries it between processes (ADR-0065)."
 
 [dependencies]
-xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main" }
+# uuid-v7: an Event's identity is minted here by xmip-core's one generator.
+xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main", features = ["uuid-v7"] }
+# The action an Event reports is a stage of the message path: node::Stage.
+node = { package = "xmip-core-node", git = "https://github.com/IlleNilsson/xmip-core-node", branch = "main" }
+# A subscriber is a Party with identities, as every arrival is.
+context = { package = "xmip-core-context", git = "https://github.com/IlleNilsson/xmip-core-context", branch = "main" }
+# Whether a subscriber may see what it asked for is the authorization gate's
+# decision, asked here and never written again.
+authorize = { package = "xmip-core-authorize", git = "https://github.com/IlleNilsson/xmip-core-authorize", branch = "main" }
+# Every delivery and every refusal is audited (ADR-0062).
+audit = { package = "xmip-core-audit", git = "https://github.com/IlleNilsson/xmip-core-audit", branch = "main" }
+# Whether one scope lies beneath another is observe::Scope's, once.
+observe = { package = "xmip-core-observe", git = "https://github.com/IlleNilsson/xmip-core-observe", branch = "main" }
+# At least once over the wire: the guards decide each attempt.
+resilience = { package = "xmip-core-resilience", git = "https://github.com/IlleNilsson/xmip-core-resilience", branch = "main" }
+# RFC 3339 for an Event's time and base64 for binary data: codec's.
+codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
+# The HTTP binding's percent-encoding of a header value: net's one writer.
+net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
+# The wire event's JSON format, read and written as the estate reads JSON.
+serde_json = "1"
+
+[dev-dependencies]
+# One real guard, so the at-least-once test is judged as a node judges it.
+retry = { package = "xmip-core-resilience-retry", git = "https://github.com/IlleNilsson/xmip-core-resilience-retry", branch = "main" }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+too_many_lines = "warn"
+pedantic = { level = "warn", priority = -1 }
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+unwrap_used = "warn"
+expect_used = "allow"
+
+# What this depends on runs optimized in a debug build (rust-style.md 5b).
+[profile.dev.package."*"]
+opt-level = 3

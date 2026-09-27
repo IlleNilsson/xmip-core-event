@@ -1,0 +1,212 @@
+//! Who subscribes: a Party, authenticated like every other, authorized by
+//! the gate every other attempt goes through (runtime-model section 17,
+//! ADR-0065 clause 4).
+//!
+//! Delivering an Event is Xmip presenting something to a Party, so the
+//! question put to the gate is a Send: `authorize::Action::Send`, the
+//! artifact the scope the subscription reaches, and the Contract the Event
+//! type it asks for — each type once, or no Contract where it asks for
+//! every type. The decision is `authorize::authorize`'s and nobody else's;
+//! nothing configured is a refusal, as it is at every gate.
+//!
+//! A subscriber in this process — a C, .NET, Java or Python program that
+//! loaded the runtime's library — shares Xmip's address space, and the
+//! operating system vouches for that as it vouches for a Unix socket's peer:
+//! its identity is `peer-credentials` naming this process, and
+//! [`SameProcess`] is the policy that admits exactly that and has no opinion
+//! on anything else.
+
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use audit::program_audit::ProgramAudit;
+use authorize::{Action, Attempt, Authorizer, Decision, authorize};
+use context::{Alignment, AuthenticatedIdentity, IdentityFacts, OnMisalignment, Verified};
+use xcore::{Established, Layer, PartyId, mechanism};
+
+use crate::filter::Filter;
+
+/// The manifest leaf [`SameProcess`] denies and allows under.
+pub const SAME_PROCESS: &str = "same-process";
+
+/// One subscriber: the Party, how it was recognized, and where its
+/// deliveries and refusals are audited.
+#[derive(Clone, Debug)]
+pub struct Subscriber {
+    pub party: PartyId,
+    pub identity: IdentityFacts,
+    pub audit: ProgramAudit,
+}
+
+impl Subscriber {
+    #[must_use]
+    pub const fn new(party: PartyId, identity: IdentityFacts, audit: ProgramAudit) -> Self {
+        Self {
+            party,
+            identity,
+            audit,
+        }
+    }
+
+    /// A program in this process, as `party`: `peer-credentials` naming
+    /// this process, proven now, resolved to the Party.
+    #[must_use]
+    pub fn in_process(party: PartyId, audit: ProgramAudit) -> Self {
+        let identity = AuthenticatedIdentity::new(
+            mechanism::peer_credentials(),
+            this_process(),
+            Established::Passed,
+            Verified::Proven,
+        )
+        .at(now())
+        .resolving_to(party);
+
+        Self::new(
+            party,
+            IdentityFacts::evaluate(Alignment::None, identity, None),
+            audit,
+        )
+    }
+
+    /// Whether this subscriber may receive what `filter` asks for, by the
+    /// authorization gate over `policies`: every type it names must be
+    /// allowed at the scope it reaches.
+    #[must_use]
+    pub fn authorized(&self, filter: &Filter, policies: &[&dyn Authorizer]) -> Decision {
+        let asked = Attempt::new(Action::Send, filter.reach()).at(now());
+        let attempts: Vec<Attempt> = if filter.types.is_empty() {
+            vec![asked]
+        } else {
+            filter
+                .types
+                .iter()
+                .map(|kind| asked.clone().on_contract(kind.clone()))
+                .collect()
+        };
+
+        attempts
+            .iter()
+            .map(|attempt| authorize(policies, &self.identity, attempt, OnMisalignment::Accept))
+            .find(|decision| !decision.allowed())
+            .unwrap_or(Decision::Allowed)
+    }
+}
+
+/// Admits a subscriber in this very process and has no opinion on any
+/// other: a program that loaded the runtime's library already shares
+/// everything Xmip holds, so refusing it an Event protects nothing.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SameProcess;
+
+impl Authorizer for SameProcess {
+    fn name(&self) -> &'static str {
+        SAME_PROCESS
+    }
+
+    fn layer(&self) -> Layer {
+        Layer::Transport
+    }
+
+    fn decide(&self, identity: &IdentityFacts, _: &Attempt) -> Option<Decision> {
+        let accountable = identity.accountable();
+        let here = accountable.mechanism.name() == mechanism::peer_credentials().name()
+            && accountable.verified == Verified::Proven
+            && accountable.value == this_process();
+
+        here.then_some(Decision::Allowed)
+    }
+}
+
+/// This process, as a `peer-credentials` value names one.
+fn this_process() -> String {
+    format!("process {}", std::process::id())
+}
+
+/// Nanoseconds since the epoch.
+pub(crate) fn now() -> i128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| i128::try_from(since.as_nanos()).unwrap_or(0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Only(&'static str);
+
+    impl Authorizer for Only {
+        fn name(&self) -> &'static str {
+            "only"
+        }
+
+        fn layer(&self) -> Layer {
+            Layer::Transport
+        }
+
+        fn decide(&self, _: &IdentityFacts, attempt: &Attempt) -> Option<Decision> {
+            Some(match attempt.contract.as_deref() {
+                Some(kind) if kind == self.0 => Decision::Allowed,
+                _ => Decision::denied("only", format!("only {}", self.0)),
+            })
+        }
+    }
+
+    fn audit() -> ProgramAudit {
+        let at = std::env::temp_dir().join("xmip-core-event-subscriber-tests");
+        ProgramAudit::new("xmip-core-event tests", Some(&at))
+    }
+
+    #[test]
+    fn a_subscriber_in_this_process_is_admitted_by_same_process() {
+        let subscriber = Subscriber::in_process(PartyId::new(1), audit());
+        let policies: [&dyn Authorizer; 1] = [&SameProcess];
+
+        assert!(
+            subscriber
+                .authorized(&Filter::everything(), &policies)
+                .allowed()
+        );
+    }
+
+    #[test]
+    fn nothing_configured_is_a_refusal_as_at_every_gate() {
+        let subscriber = Subscriber::in_process(PartyId::new(1), audit());
+
+        let decision = subscriber.authorized(&Filter::everything(), &[]);
+
+        assert!(!decision.allowed());
+        assert!(
+            decision.to_string().contains("send on 'xmip:///'"),
+            "{decision}"
+        );
+    }
+
+    #[test]
+    fn every_type_asked_for_must_be_allowed() {
+        let subscriber = Subscriber::in_process(PartyId::new(1), audit());
+        let only = Only("se.xmip.send.failure");
+        let policies: [&dyn Authorizer; 1] = [&only];
+        let one = Filter::everything().of_type("se.xmip.send.failure");
+
+        assert!(subscriber.authorized(&one, &policies).allowed());
+        assert!(
+            !subscriber
+                .authorized(&one.of_type("se.xmip.receive.success"), &policies)
+                .allowed()
+        );
+    }
+
+    #[test]
+    fn same_process_has_no_opinion_on_another_process() {
+        let identity = AuthenticatedIdentity::new(
+            mechanism::peer_credentials(),
+            "process 0",
+            Established::Passed,
+            Verified::Proven,
+        );
+        let facts = IdentityFacts::evaluate(Alignment::None, identity, None);
+        let attempt = Attempt::new(Action::Send, "xmip:///");
+
+        assert_eq!(SameProcess.decide(&facts, &attempt), None);
+    }
+}
