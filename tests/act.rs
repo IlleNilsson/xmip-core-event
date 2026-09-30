@@ -13,17 +13,16 @@ use std::time::{Duration, Instant};
 use audit::keeper::settle;
 use audit::program_audit::ProgramAudit;
 use node::Stage;
-use observe::SubscriptionState;
+use observe::{Act, PauseState};
 use party::{Party, PartyKind};
 use xcore::PartyId;
 use xmip_core_event::Event;
-use xmip_core_event::act::Act;
 use xmip_core_event::filter::Filter;
 use xmip_core_event::hub::Hub;
 use xmip_core_event::outcome::Outcome;
 use xmip_core_event::subscriber::{SameProcess, Subscriber};
 
-const NODE: &str = "xmip:///CT/node/R1";
+const NODE: &str = "xmip:///CT/node/alpha";
 
 fn directory(name: &str) -> PathBuf {
     let at = std::env::temp_dir().join(format!("xmip-event-act-{name}-{}", std::process::id()));
@@ -51,7 +50,7 @@ fn received() -> Event {
     Event::completed(
         Stage::Receive,
         Outcome::Success,
-        "xmip:///CT/node/R1/receive/a",
+        "xmip:///CT/node/alpha/receive/a",
     )
 }
 
@@ -84,7 +83,7 @@ fn a_paused_subscription_keeps_queuing_hands_nothing_over_and_counts_what_it_mis
     assert!(started.elapsed() >= Duration::from_millis(25), "it waited");
 
     let [standing] = hub.standing(NODE).try_into().expect("one");
-    assert_eq!(standing.state, SubscriptionState::Paused);
+    assert_eq!(standing.state, PauseState::Paused);
     assert_eq!(
         (standing.queued, standing.missed, standing.delivered),
         (2, 1, 0)
@@ -142,7 +141,7 @@ fn resuming_hands_over_what_queued_and_wakes_a_waiting_drain() {
         woke.duration_since(resumed_at)
     );
     assert_eq!(hub.standing(NODE)[0].delivered, 1);
-    assert_eq!(hub.standing(NODE)[0].state, SubscriptionState::Active);
+    assert_eq!(hub.standing(NODE)[0].state, PauseState::Active);
     assert!(audited(&at).contains("action = \"event.resume\""));
     drop(subscription);
     let _ = fs::remove_dir_all(&at);

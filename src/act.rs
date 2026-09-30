@@ -1,9 +1,10 @@
-//! What an operator does to a subscription: pause it, resume it, remove it
-//! (ADR-0065, amendment 2026-09-29).
+//! What an operator does to an Event subscription: pause it, resume it,
+//! remove it (ADR-0065, amendment 2026-09-29).
 //!
-//! The words are written here and nowhere else; the C boundary carries the
-//! word (`xmip_operate.h` section 11, `xmip_event_subscription_act_v1`), and
-//! every surface names an act by it. [`Hub::act`] is the one place an act is
+//! The acts and their words are `observe::Act`'s, written once for every
+//! noun an operator acts on; the C boundary carries the word (`xmip_operate.h`
+//! section 11, `xmip_event_subscription_act_v1`), and every surface names an
+//! act by it. [`Hub::act`] is the one place an act on an Event subscription is
 //! applied: paused, a subscription keeps queuing up to its capacity and
 //! hands nothing over; resumed, it hands over what queued; removed, it is
 //! closed and gone. Every act is recorded in the subscriber's own audit,
@@ -11,53 +12,12 @@
 //! refused in words. Who may act at all is the surface's to decide by role;
 //! the hub applies what reaches it.
 
+use observe::{Act, Noun};
 use xcore::Severity;
 
 use crate::EventError;
 use crate::audit_trail::{described, record};
 use crate::hub::Hub;
-
-/// What an operator does to a subscription.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum Act {
-    /// Hold delivery; the queue keeps filling up to its capacity.
-    Pause,
-    /// Deliver again, what queued first.
-    Resume,
-    /// Unsubscribe it.
-    Remove,
-}
-
-impl Act {
-    /// Every act, in the order a surface offers them.
-    pub const ALL: [Self; 3] = [Self::Pause, Self::Resume, Self::Remove];
-
-    /// The word the estate names the act by.
-    #[must_use]
-    pub const fn word(self) -> &'static str {
-        match self {
-            Self::Pause => "pause",
-            Self::Resume => "resume",
-            Self::Remove => "remove",
-        }
-    }
-
-    /// The act a word names, exactly.
-    #[must_use]
-    pub fn named(word: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|act| act.word() == word)
-    }
-
-    /// The action an audit record of it carries.
-    #[must_use]
-    pub const fn action(self) -> &'static str {
-        match self {
-            Self::Pause => "event.pause",
-            Self::Resume => "event.resume",
-            Self::Remove => "event.remove",
-        }
-    }
-}
 
 impl Hub {
     /// Apply `act` to the subscription numbered `id`, by `who`, and say what
@@ -94,26 +54,11 @@ impl Hub {
         about.insert("by".to_string(), who.to_string());
         record(
             &slot.subscriber,
-            act.action(),
+            &Noun::EventSubscription.action(act),
             Severity::Information,
             &said,
             about,
         );
         Ok(said)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn an_act_is_its_word_and_nothing_else_is_one() {
-        for act in Act::ALL {
-            assert_eq!(Act::named(act.word()), Some(act));
-            assert!(act.action().ends_with(act.word()));
-        }
-        assert_eq!(Act::named("Pause"), None);
-        assert_eq!(Act::named("unsubscribe"), None);
     }
 }

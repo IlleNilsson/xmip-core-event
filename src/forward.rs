@@ -22,7 +22,7 @@ use xcore::{Failure, PartyId, Severity};
 use crate::Event;
 use crate::audit_trail::record;
 use crate::binding::{Binding, Carried, Mode};
-use crate::hub::Subscription;
+use crate::hub::EventSubscription;
 use crate::wire::WireEvent;
 
 /// A transport that carries a `WireEvent` to a Party.
@@ -48,7 +48,7 @@ pub struct Pumped {
 
 /// A subscription forwarded over a wire.
 pub struct Forwarder<W: Wire> {
-    subscription: Subscription,
+    subscription: EventSubscription,
     binding: Binding,
     mode: Mode,
     wire: W,
@@ -57,7 +57,12 @@ pub struct Forwarder<W: Wire> {
 
 impl<W: Wire> Forwarder<W> {
     #[must_use]
-    pub const fn new(subscription: Subscription, binding: Binding, mode: Mode, wire: W) -> Self {
+    pub const fn new(
+        subscription: EventSubscription,
+        binding: Binding,
+        mode: Mode,
+        wire: W,
+    ) -> Self {
         Self {
             subscription,
             binding,

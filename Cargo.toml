@@ -23,7 +23,8 @@ context = { package = "xmip-core-context", git = "https://github.com/IlleNilsson
 authorize = { package = "xmip-core-authorize", git = "https://github.com/IlleNilsson/xmip-core-authorize", branch = "main" }
 # Every delivery and every refusal is audited (ADR-0062).
 audit = { package = "xmip-core-audit", git = "https://github.com/IlleNilsson/xmip-core-audit", branch = "main" }
-# Whether one scope lies beneath another is observe::Scope's, once.
+# Whether one scope lies beneath another is observe::Scope's, once, and an
+# operator's acts and their words are observe::Act's.
 observe = { package = "xmip-core-observe", git = "https://github.com/IlleNilsson/xmip-core-observe", branch = "main" }
 # At least once over the wire: the guards decide each attempt.
 resilience = { package = "xmip-core-resilience", git = "https://github.com/IlleNilsson/xmip-core-resilience", branch = "main" }
@@ -33,10 +34,6 @@ codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNil
 net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
 # The wire event's JSON format, read and written as the estate reads JSON.
 serde_json = "1"
-# An operator's order left for a node is a file, and on disk the estate is
-# TOML: serde derives its shape and toml writes and reads it.
-serde = { version = "1", features = ["derive"] }
-toml = "0.8"
 
 [dev-dependencies]
 # One real guard, so the at-least-once test is judged as a node judges it.

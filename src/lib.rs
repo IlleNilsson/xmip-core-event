@@ -26,9 +26,10 @@
 //! runtime's library to [`hub::Hub::process`]; every language binds that.
 //!
 //! An operator lists what a hub holds ([`hub::Hub::standing`]) and pauses,
-//! resumes or removes a subscription ([`act::Act`], [`hub::Hub::act`]);
-//! a surface that reads a node's publication only leaves the act as an
-//! [`order::Order`] for the node to take (ADR-0065, amendment 2026-09-29).
+//! resumes or removes an Event subscription ([`hub::Hub::act`], by
+//! `observe::Act`); a surface that reads a node's publication only leaves
+//! the act as an `observe::Order` for the node to take (ADR-0065, amendment
+//! 2026-09-29).
 
 pub mod act;
 mod audit_trail;
@@ -38,7 +39,6 @@ pub mod forward;
 pub mod hub;
 pub mod json_format;
 pub mod listener;
-pub mod order;
 pub mod outcome;
 pub mod subscriber;
 pub mod wire;
