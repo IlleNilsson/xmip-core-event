@@ -100,6 +100,7 @@ pub(crate) fn described(subscriber: &Subscriber, filter: &Filter) -> BTreeMap<St
     let outcomes: Vec<&str> = filter.outcomes.iter().map(|o| o.word()).collect();
     BTreeMap::from([
         ("party".to_string(), subscriber.party.to_string()),
+        ("name".to_string(), subscriber.name.clone()),
         ("identity".to_string(), subscriber.identity.to_string()),
         ("scope".to_string(), filter.reach().to_string()),
         ("types".to_string(), filter.types.join(" ")),

@@ -15,6 +15,14 @@
 //! was allowed. Every subscription, every refusal, every delivery and every
 //! Event a full queue refused is audited through the subscriber's own
 //! `ProgramAudit`, off both the publisher's and the subscriber's path.
+//!
+//! **An operator holds, lets go of and ends a subscription** (ADR-0065,
+//! amendment 2026-09-29; `act.rs`). Paused, a subscription stays and keeps
+//! queuing up to its capacity, and nothing is handed over until it is
+//! resumed; what a full queue refused meanwhile is counted as missed, as it
+//! always is. Removed, it is closed and gone from the hub, and its holder's
+//! next drain finds it closed. What the hub holds is listed as
+//! `observe::Subscription` ([`Hub::standing`]), the record a node publishes.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -22,6 +30,7 @@ use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError, RwLock, Weak};
 use std::time::Duration;
 
 use authorize::Authorizer;
+use observe::{Subscription as Published, SubscriptionState};
 use xcore::Severity;
 
 use crate::audit_trail::{Deliveries, described, record};
@@ -48,9 +57,11 @@ struct Inner {
 
 /// One subscription's filter and queue, shared by the hub and the handle.
 pub(crate) struct Slot {
-    id: u64,
-    filter: Filter,
+    pub(crate) id: u64,
+    pub(crate) subscriber: Subscriber,
+    pub(crate) filter: Filter,
     capacity: usize,
+    since_unix_nanos: i64,
     queue: Mutex<Queue>,
     ready: Condvar,
 }
@@ -58,8 +69,15 @@ pub(crate) struct Slot {
 #[derive(Default)]
 struct Queue {
     events: VecDeque<Arc<Event>>,
+    /// Refused since the drain before, handed over at the next.
     refused: u64,
     closed: bool,
+    /// Held by an operator: queuing goes on, handing over does not.
+    paused: bool,
+    /// Handed over since the subscription was made.
+    delivered: u64,
+    /// Refused since the subscription was made.
+    missed: u64,
 }
 
 /// What one drain handed over: the Events, oldest first, and how many a
@@ -121,12 +139,14 @@ impl Hub {
 
         let slot = Arc::new(Slot {
             id: self.inner.next_slot.fetch_add(1, Ordering::Relaxed),
+            subscriber: subscriber.clone(),
             filter,
             capacity: if capacity == 0 {
                 DEFAULT_CAPACITY
             } else {
                 capacity
             },
+            since_unix_nanos: observe::now_unix_nanos(),
             queue: Mutex::new(Queue::default()),
             ready: Condvar::new(),
         });
@@ -169,11 +189,38 @@ impl Hub {
     /// How many subscriptions are open.
     #[must_use]
     pub fn subscriptions(&self) -> usize {
+        self.slots().len()
+    }
+
+    /// Every open subscription as the node at `node` publishes it, oldest
+    /// first.
+    #[must_use]
+    pub fn standing(&self, node: &str) -> Vec<Published> {
+        self.slots()
+            .iter()
+            .map(|slot| slot.standing(node))
+            .collect()
+    }
+
+    /// The open subscription numbered `id`, if there is one.
+    pub(crate) fn slot(&self, id: u64) -> Option<Arc<Slot>> {
+        self.slots().iter().find(|slot| slot.id == id).cloned()
+    }
+
+    /// Take the subscription numbered `id` out of the hub.
+    pub(crate) fn forget(&self, id: u64) {
         self.inner
-            .slots
-            .read()
-            .unwrap_or_else(PoisonError::into_inner)
-            .len()
+            .change(|slots| slots.retain(|slot| slot.id != id));
+    }
+
+    fn slots(&self) -> Slots {
+        Arc::clone(
+            &self
+                .inner
+                .slots
+                .read()
+                .unwrap_or_else(PoisonError::into_inner),
+        )
     }
 }
 
@@ -190,7 +237,7 @@ impl Inner {
 
 impl Slot {
     /// Queue `event` unless the queue is closed or full; a full queue
-    /// counts the refusal.
+    /// counts the refusal, paused or not.
     fn offer(&self, event: &Arc<Event>) -> bool {
         let mut queue = self.queue.lock().unwrap_or_else(PoisonError::into_inner);
         if queue.closed {
@@ -198,6 +245,7 @@ impl Slot {
         }
         if queue.events.len() >= self.capacity {
             queue.refused += 1;
+            queue.missed += 1;
             return false;
         }
         queue.events.push_back(Arc::clone(event));
@@ -206,20 +254,59 @@ impl Slot {
         true
     }
 
-    /// Up to `max` Events, waiting up to `timeout` for the first.
+    /// Up to `max` Events, waiting up to `timeout` for the first. Paused,
+    /// nothing is handed over: the wait lasts until it is resumed, closed
+    /// or out of time, and what queued stays queued.
     fn take(&self, timeout: Duration, max: usize) -> Delivery {
         let queue = self.queue.lock().unwrap_or_else(PoisonError::into_inner);
         let (mut queue, _) = self
             .ready
             .wait_timeout_while(queue, timeout, |queue| {
-                queue.events.is_empty() && queue.refused == 0 && !queue.closed
+                !queue.closed && (queue.paused || (queue.events.is_empty() && queue.refused == 0))
             })
             .unwrap_or_else(PoisonError::into_inner);
+        if queue.paused {
+            return Delivery::default();
+        }
         let count = queue.events.len().min(max.max(1));
+        queue.delivered += count as u64;
 
         Delivery {
             events: queue.events.drain(..count).collect(),
             refused: std::mem::take(&mut queue.refused),
+        }
+    }
+
+    /// Hold delivery, or let go of it; whether that changed anything.
+    pub(crate) fn hold(&self, paused: bool) -> bool {
+        let mut queue = self.queue.lock().unwrap_or_else(PoisonError::into_inner);
+        let changed = queue.paused != paused;
+        queue.paused = paused;
+        drop(queue);
+        self.ready.notify_all();
+        changed
+    }
+
+    /// This subscription as the node at `node` publishes it.
+    fn standing(&self, node: &str) -> Published {
+        let queue = self.queue.lock().unwrap_or_else(PoisonError::into_inner);
+        Published {
+            node: node.to_string(),
+            id: self.id,
+            subscriber: self.subscriber.name.clone(),
+            party: self.subscriber.party.to_string(),
+            action: self.filter.said(),
+            scope: self.filter.reach().to_string(),
+            state: if queue.paused {
+                SubscriptionState::Paused
+            } else {
+                SubscriptionState::Active
+            },
+            queued: queue.events.len() as u64,
+            capacity: self.capacity as u64,
+            delivered: queue.delivered,
+            missed: queue.missed,
+            since_unix_nanos: self.since_unix_nanos,
         }
     }
 
@@ -241,6 +328,8 @@ impl Slot {
 }
 
 /// An open subscription. Dropping it unsubscribes, and says so to audit.
+/// An operator's remove closes it from outside: its next drain hands over
+/// nothing and a listener's thread ends.
 pub struct Subscription {
     slot: Arc<Slot>,
     hub: Weak<Inner>,
@@ -264,6 +353,18 @@ impl Subscription {
     #[must_use]
     pub const fn subscriber(&self) -> &Subscriber {
         &self.subscriber
+    }
+
+    /// Its number in the hub: what an operator names it by.
+    #[must_use]
+    pub fn id(&self) -> u64 {
+        self.slot.id
+    }
+
+    /// Whether it was closed: removed by an operator.
+    #[must_use]
+    pub fn is_closed(&self) -> bool {
+        self.slot.is_closed()
     }
 
     pub(crate) fn slot(&self) -> Arc<Slot> {

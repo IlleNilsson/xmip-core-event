@@ -79,6 +79,28 @@ impl Filter {
     pub fn reach(&self) -> &str {
         self.scope.as_deref().unwrap_or("xmip:///")
     }
+
+    /// What this filter subscribes to, in the words a surface lists it by:
+    /// the types it names, or every Event, then the outcomes and the Party
+    /// where it names them. The scope is [`Self::reach`], said apart.
+    #[must_use]
+    pub fn said(&self) -> String {
+        let mut said = if self.types.is_empty() {
+            "every Event".to_string()
+        } else {
+            self.types.join(", ")
+        };
+        if !self.outcomes.is_empty() {
+            let outcomes: Vec<&str> = self.outcomes.iter().map(|outcome| outcome.word()).collect();
+            said.push_str(" ending ");
+            said.push_str(&outcomes.join(", "));
+        }
+        if let Some(party) = self.party {
+            said.push_str(" about ");
+            said.push_str(&party.to_string());
+        }
+        said
+    }
 }
 
 #[cfg(test)]
@@ -141,5 +163,24 @@ mod tests {
 
         assert!(!Filter::everything().about(PartyId::new(7)).matches(&event));
         assert_eq!(Filter::everything().reach(), "xmip:///");
+    }
+
+    #[test]
+    fn a_filter_says_what_it_subscribes_to() {
+        assert_eq!(Filter::everything().said(), "every Event");
+        assert_eq!(
+            Filter::everything()
+                .of_type("se.xmip.send.failure")
+                .of_type("se.xmip.send.timeout")
+                .said(),
+            "se.xmip.send.failure, se.xmip.send.timeout"
+        );
+        assert_eq!(
+            Filter::everything()
+                .ending(Outcome::Failure)
+                .ending(Outcome::ExhaustedRetries)
+                .said(),
+            "every Event ending failure, exhausted-retries"
+        );
     }
 }

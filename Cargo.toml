@@ -14,6 +14,8 @@ description = "The Xmip Event, the one subscription rule, the in-process hub tha
 xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main", features = ["uuid-v7"] }
 # The action an Event reports is a stage of the message path: node::Stage.
 node = { package = "xmip-core-node", git = "https://github.com/IlleNilsson/xmip-core-node", branch = "main" }
+# The Party as declared, whose name an operator reads a subscriber by.
+party = { package = "xmip-core-party", git = "https://github.com/IlleNilsson/xmip-core-party", branch = "main" }
 # A subscriber is a Party with identities, as every arrival is.
 context = { package = "xmip-core-context", git = "https://github.com/IlleNilsson/xmip-core-context", branch = "main" }
 # Whether a subscriber may see what it asked for is the authorization gate's
@@ -31,6 +33,10 @@ codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNil
 net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
 # The wire event's JSON format, read and written as the estate reads JSON.
 serde_json = "1"
+# An operator's order left for a node is a file, and on disk the estate is
+# TOML: serde derives its shape and toml writes and reads it.
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
 
 [dev-dependencies]
 # One real guard, so the at-least-once test is judged as a node judges it.

@@ -45,6 +45,16 @@ be told. Delivery is not in the message path and no Journey waits for it.
   carries a subscription's Events through a `forward::Wire` — Xmip's own
   http, kafka and amqp transports each implement one — at least once, in
   order, each attempt judged by the resilience guards.
+- **Operated.** `Hub::standing` lists each open subscription as the
+  `observe::Subscription` a node publishes — node and number, subscriber,
+  what it asks for (`Filter::said`), state and its queue's counts — and
+  `Hub::act` pauses, resumes or removes one (`act::Act`): paused, it keeps
+  queuing up to its capacity and hands nothing over; resumed, it hands over
+  what queued; removed, it is closed and its holder finds it so. Each act is
+  audited in the subscriber's audit with who took it. A surface that reads a
+  node only through its publication leaves the act as an `order::Order`
+  where the publication says, and the node takes it (ADR-0065, amendment
+  2026-09-29).
 - **Audited.** Every subscription, delivery, refusal and forward is recorded
   in the subscriber's program audit (ADR-0062), handed to the audit
   capability's keeper (`audit::keeper`) so no Event waits for a disk and

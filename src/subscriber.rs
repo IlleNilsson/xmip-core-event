@@ -19,6 +19,7 @@
 use audit::program_audit::ProgramAudit;
 use authorize::{Action, Attempt, Authorizer, Decision, authorize};
 use context::{Alignment, AuthenticatedIdentity, IdentityFacts, OnMisalignment, Verified};
+use party::Party;
 use xcore::{Clock, Established, Layer, PartyId, SystemClock, mechanism};
 
 use crate::filter::Filter;
@@ -26,11 +27,16 @@ use crate::filter::Filter;
 /// The manifest leaf [`SameProcess`] denies and allows under.
 pub const SAME_PROCESS: &str = "same-process";
 
-/// One subscriber: the Party, how it was recognized, and where its
-/// deliveries and refusals are audited.
+/// One subscriber: the Party, its name where the Party was declared with
+/// one, how it was recognized, and where its deliveries and refusals are
+/// audited.
 #[derive(Clone, Debug)]
 pub struct Subscriber {
     pub party: PartyId,
+    /// The Party's name as it was declared (`party::Party::name`), what an
+    /// operator reads it by; empty for a subscriber known by its identifier
+    /// alone, and never made up from the identifier.
+    pub name: String,
     pub identity: IdentityFacts,
     pub audit: ProgramAudit,
 }
@@ -40,8 +46,20 @@ impl Subscriber {
     pub const fn new(party: PartyId, identity: IdentityFacts, audit: ProgramAudit) -> Self {
         Self {
             party,
+            name: String::new(),
             identity,
             audit,
+        }
+    }
+
+    /// A program in this process subscribing as the declared `party`: its
+    /// identifier and its name are the declaration's, taken from it and
+    /// nowhere else.
+    #[must_use]
+    pub fn declared(party: &Party, audit: ProgramAudit) -> Self {
+        Self {
+            name: party.name.clone(),
+            ..Self::in_process(party.party_id, audit)
         }
     }
 
