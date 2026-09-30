@@ -26,8 +26,8 @@ be told. Delivery is not in the message path and no Journey waits for it.
 - **In process.** `hub::Hub` fans an Event out to every matching
   subscription through a bounded queue each and never waits for a
   subscriber: a full queue refuses the Event for that subscriber and counts
-  it. `Subscription::next` waits for the first Event and wakes on arrival;
-  `Subscription::listen` calls back on a thread of its own instead.
+  it. `EventSubscription::next` waits for the first Event and wakes on arrival;
+  `EventSubscription::listen` calls back on a thread of its own instead.
   `Hub::process` is the process's hub, and `xmip_operate.h` section 11 is
   its C boundary, forwarded by the runtime's library and bound by C, C++,
   .NET, Java and Python (`xmip-core-abi`).
@@ -45,16 +45,19 @@ be told. Delivery is not in the message path and no Journey waits for it.
   carries a subscription's Events through a `forward::Wire` — Xmip's own
   http, kafka and amqp transports each implement one — at least once, in
   order, each attempt judged by the resilience guards.
-- **Operated.** `Hub::standing` lists each open subscription as the
-  `observe::Subscription` a node publishes — node and number, subscriber,
-  what it asks for (`Filter::said`), state and its queue's counts — and
-  `Hub::act` pauses, resumes or removes one (`act::Act`): paused, it keeps
-  queuing up to its capacity and hands nothing over; resumed, it hands over
-  what queued; removed, it is closed and its holder finds it so. Each act is
-  audited in the subscriber's audit with who took it. A surface that reads a
-  node only through its publication leaves the act as an `order::Order`
-  where the publication says, and the node takes it (ADR-0065, amendment
-  2026-09-29).
+- **Operated.** `Hub::standing` lists each open Event subscription as the
+  `observe::EventSubscription` a node publishes — node and number,
+  subscriber, what it asks for (`Filter::said`), state and its queue's
+  counts — and `Hub::act` pauses, resumes or removes one (`observe::Act`,
+  whose words are written once for every noun an operator acts on): paused,
+  it keeps queuing up to its capacity and hands nothing over; resumed, it
+  hands over what queued; removed, it is closed and its holder finds it so.
+  Each act is audited in the subscriber's audit with who took it. A surface
+  that reads a node only through its publication leaves the act as an
+  `observe::Order` where the publication says, and the node takes it
+  (ADR-0065, amendment 2026-09-29). The handle a subscriber holds is
+  `hub::EventSubscription`, so no identifier here reads as a Subscription,
+  which picks a published Message up (ADR-0013, amendment 2026-09-30).
 - **Audited.** Every subscription, delivery, refusal and forward is recorded
   in the subscriber's program audit (ADR-0062), handed to the audit
   capability's keeper (`audit::keeper`) so no Event waits for a disk and

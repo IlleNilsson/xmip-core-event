@@ -22,7 +22,8 @@
 //! resumed; what a full queue refused meanwhile is counted as missed, as it
 //! always is. Removed, it is closed and gone from the hub, and its holder's
 //! next drain finds it closed. What the hub holds is listed as
-//! `observe::Subscription` ([`Hub::standing`]), the record a node publishes.
+//! `observe::EventSubscription` ([`Hub::standing`]), the record a node
+//! publishes.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -30,7 +31,7 @@ use std::sync::{Arc, Condvar, Mutex, OnceLock, PoisonError, RwLock, Weak};
 use std::time::Duration;
 
 use authorize::Authorizer;
-use observe::{Subscription as Published, SubscriptionState};
+use observe::{EventSubscription as Published, PauseState};
 use xcore::Severity;
 
 use crate::audit_trail::{Deliveries, described, record};
@@ -119,7 +120,7 @@ impl Hub {
         subscriber: Subscriber,
         filter: Filter,
         capacity: usize,
-    ) -> Result<Subscription, EventError> {
+    ) -> Result<EventSubscription, EventError> {
         let policies: Vec<&dyn Authorizer> =
             self.inner.policies.iter().map(|policy| &**policy).collect();
         let decision = subscriber.authorized(&filter, &policies);
@@ -159,7 +160,7 @@ impl Hub {
             about,
         );
 
-        Ok(Subscription {
+        Ok(EventSubscription {
             slot,
             hub: Arc::downgrade(&self.inner),
             subscriber,
@@ -298,9 +299,9 @@ impl Slot {
             action: self.filter.said(),
             scope: self.filter.reach().to_string(),
             state: if queue.paused {
-                SubscriptionState::Paused
+                PauseState::Paused
             } else {
-                SubscriptionState::Active
+                PauseState::Active
             },
             queued: queue.events.len() as u64,
             capacity: self.capacity as u64,
@@ -330,14 +331,14 @@ impl Slot {
 /// An open subscription. Dropping it unsubscribes, and says so to audit.
 /// An operator's remove closes it from outside: its next drain hands over
 /// nothing and a listener's thread ends.
-pub struct Subscription {
+pub struct EventSubscription {
     slot: Arc<Slot>,
     hub: Weak<Inner>,
     subscriber: Subscriber,
     deliveries: Arc<Deliveries>,
 }
 
-impl Subscription {
+impl EventSubscription {
     /// Up to `max` Events (at least one), waiting up to `timeout` for the
     /// first and waking the moment one arrives. What a drain hands over is
     /// audited — the Events delivered, by identity, and how many a full
@@ -372,7 +373,7 @@ impl Subscription {
     }
 }
 
-impl Drop for Subscription {
+impl Drop for EventSubscription {
     fn drop(&mut self) {
         self.slot.close();
         if let Some(inner) = self.hub.upgrade() {

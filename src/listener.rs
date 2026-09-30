@@ -13,7 +13,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use crate::Event;
-use crate::hub::{Slot, Subscription};
+use crate::hub::{EventSubscription, Slot};
 
 /// How long the thread sleeps between looks when nothing arrives; closing
 /// wakes it at once, so this bounds nothing an operator waits for.
@@ -28,7 +28,7 @@ pub struct Listener {
     thread: Option<JoinHandle<()>>,
 }
 
-impl Subscription {
+impl EventSubscription {
     /// Call `each` for every Event, on a thread of its own, until the
     /// returned [`Listener`] is dropped.
     ///
