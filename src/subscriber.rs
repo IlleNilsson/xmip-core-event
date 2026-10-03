@@ -10,22 +10,19 @@
 //! nothing configured is a refusal, as it is at every gate.
 //!
 //! A subscriber in this process — a C, .NET, Java or Python program that
-//! loaded the runtime's library — shares Xmip's address space, and the
-//! operating system vouches for that as it vouches for a Unix socket's peer:
-//! its identity is `peer-credentials` naming this process, and
-//! [`SameProcess`] is the policy that admits exactly that and has no opinion
-//! on anything else.
+//! loaded the runtime's library — is recognized as the operating system
+//! vouches for a Unix socket's peer: its identity is `peer-credentials`
+//! naming this process, resolved to the Party it names. Being here admits
+//! it to nothing (ADR-0065, amendment 2026-09-26): its Party is authorized
+//! as every other is, by the hub's gate (`gate.rs`).
 
 use audit::program_audit::ProgramAudit;
 use authorize::{Action, Attempt, Authorizer, Decision, authorize};
 use context::{Alignment, AuthenticatedIdentity, IdentityFacts, OnMisalignment, Verified};
 use party::Party;
-use xcore::{Clock, Established, Layer, PartyId, SystemClock, mechanism};
+use xcore::{Clock, Established, PartyId, SystemClock, mechanism};
 
 use crate::filter::Filter;
-
-/// The manifest leaf [`SameProcess`] denies and allows under.
-pub const SAME_PROCESS: &str = "same-process";
 
 /// One subscriber: the Party, its name where the Party was declared with
 /// one, how it was recognized, and where its deliveries and refusals are
@@ -108,31 +105,6 @@ impl Subscriber {
     }
 }
 
-/// Admits a subscriber in this very process and has no opinion on any
-/// other: a program that loaded the runtime's library already shares
-/// everything Xmip holds, so refusing it an Event protects nothing.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SameProcess;
-
-impl Authorizer for SameProcess {
-    fn name(&self) -> &'static str {
-        SAME_PROCESS
-    }
-
-    fn layer(&self) -> Layer {
-        Layer::Transport
-    }
-
-    fn decide(&self, identity: &IdentityFacts, _: &Attempt) -> Option<Decision> {
-        let accountable = identity.accountable();
-        let here = accountable.mechanism.name() == mechanism::peer_credentials().name()
-            && accountable.verified == Verified::Proven
-            && accountable.value == this_process();
-
-        here.then_some(Decision::Allowed)
-    }
-}
-
 /// This process, as a `peer-credentials` value names one.
 fn this_process() -> String {
     format!("process {}", std::process::id())
@@ -141,6 +113,7 @@ fn this_process() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use xcore::Layer;
 
     struct Only(&'static str);
 
@@ -164,18 +137,6 @@ mod tests {
     fn audit() -> ProgramAudit {
         let at = std::env::temp_dir().join("xmip-core-event-subscriber-tests");
         ProgramAudit::new("xmip-core-event tests", Some(&at))
-    }
-
-    #[test]
-    fn a_subscriber_in_this_process_is_admitted_by_same_process() {
-        let subscriber = Subscriber::in_process(PartyId::new(1), audit());
-        let policies: [&dyn Authorizer; 1] = [&SameProcess];
-
-        assert!(
-            subscriber
-                .authorized(&Filter::everything(), &policies)
-                .allowed()
-        );
     }
 
     #[test]
@@ -204,19 +165,5 @@ mod tests {
                 .authorized(&one.of_type("se.xmip.receive.success"), &policies)
                 .allowed()
         );
-    }
-
-    #[test]
-    fn same_process_has_no_opinion_on_another_process() {
-        let identity = AuthenticatedIdentity::new(
-            mechanism::peer_credentials(),
-            "process 0",
-            Established::Passed,
-            Verified::Proven,
-        );
-        let facts = IdentityFacts::evaluate(Alignment::None, identity, None);
-        let attempt = Attempt::new(Action::Send, "xmip:///");
-
-        assert_eq!(SameProcess.decide(&facts, &attempt), None);
     }
 }

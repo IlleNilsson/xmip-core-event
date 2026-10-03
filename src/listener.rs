@@ -44,7 +44,7 @@ impl EventSubscription {
             .spawn(move || {
                 let subscription = self;
                 let slot = subscription.slot();
-                while !slot.is_closed() {
+                while !slot.queue.is_closed() {
                     for event in subscription.next(IDLE, BATCH).events {
                         each(&event);
                     }
@@ -60,7 +60,7 @@ impl EventSubscription {
 
 impl Drop for Listener {
     fn drop(&mut self) {
-        self.slot.close();
+        self.slot.queue.close();
         if let Some(thread) = self.thread.take()
             && thread.thread().id() != thread::current().id()
         {

@@ -18,13 +18,14 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use audit::program_audit::ProgramAudit;
+use authorize_party::PartyPolicy;
 use node::Stage;
 use xcore::PartyId;
 use xmip_core_event::Event;
 use xmip_core_event::filter::Filter;
 use xmip_core_event::hub::Hub;
 use xmip_core_event::outcome::Outcome;
-use xmip_core_event::subscriber::{SameProcess, Subscriber};
+use xmip_core_event::subscriber::Subscriber;
 
 /// How many Events each measurement publishes.
 const ROUNDS: usize = 500;
@@ -47,6 +48,11 @@ fn subscriber(at: &Path) -> Subscriber {
         PartyId::new(5),
         ProgramAudit::new("xmip-core-event tests", Some(at)),
     )
+}
+
+/// A hub whose policy allows the one Party these tests subscribe as.
+fn allowing() -> Hub {
+    Hub::new(vec![Arc::new(PartyPolicy::new().allow(PartyId::new(5)))])
 }
 
 /// The median, the 99th percentile and the worst, printed and returned.
@@ -97,9 +103,10 @@ fn spin(pause: Duration) {
 /// Publish `ROUNDS` Events a little apart, each stamped as it goes, and
 /// wake the control thread between them.
 fn publish_apart(hub: &Hub, sent: &Mutex<Vec<Instant>>, control: &Control) {
+    let node = configure::fixture::test_cluster().node_scope(0);
     for _ in 0..ROUNDS {
         spin(Duration::from_micros(200));
-        let event = Event::completed(Stage::Receive, Outcome::Success, "xmip:///c/node/n");
+        let event = Event::completed(Stage::Receive, Outcome::Success, node.as_str());
         sent.lock().expect("sent").push(Instant::now());
         hub.publish(event);
         spin(Duration::from_micros(100));
@@ -114,7 +121,7 @@ fn publish_apart(hub: &Hub, sent: &Mutex<Vec<Instant>>, control: &Control) {
 fn an_event_reaches_a_waiting_subscriber_within_a_millisecond() {
     let _turn = ONE_AT_A_TIME.lock();
     let at = directory("latency-next");
-    let hub = Arc::new(Hub::new(vec![Arc::new(SameProcess)]));
+    let hub = Arc::new(allowing());
     let subscription = hub
         .subscribe(subscriber(&at), Filter::everything(), 0)
         .expect("allowed");
@@ -158,7 +165,7 @@ fn an_event_reaches_a_waiting_subscriber_within_a_millisecond() {
 fn an_event_reaches_a_listener_within_a_millisecond() {
     let _turn = ONE_AT_A_TIME.lock();
     let at = directory("latency-listen");
-    let hub = Hub::new(vec![Arc::new(SameProcess)]);
+    let hub = allowing();
     let sent = Arc::new(Mutex::new(Vec::new()));
     let (tell, told) = mpsc::channel();
     let listener = {

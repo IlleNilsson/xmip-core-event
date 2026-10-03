@@ -32,12 +32,23 @@ resilience = { package = "xmip-core-resilience", git = "https://github.com/IlleN
 codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
 # The HTTP binding's percent-encoding of a header value: net's one writer.
 net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
+# The Event link between nodes: Xmip's own mutual TLS (ADR-0063), its two
+# directions on two threads (tls::duplex), and net's frames.
+tls = { package = "xmip-core-library-tls", git = "https://github.com/IlleNilsson/xmip-core-library-tls", branch = "main" }
 # The wire event's JSON format, read and written as the estate reads JSON.
 serde_json = "1"
 
 [dev-dependencies]
+# The test cluster's names, from its `xmip.toml` (`configure::fixture`;
+# ADR-0056, amendment 2026-10-03): no test writes a cluster or node name.
+configure = { package = "xmip-core-configure", git = "https://github.com/IlleNilsson/xmip-core-configure", branch = "main", features = ["test-support"] }
 # One real guard, so the at-least-once test is judged as a node judges it.
 retry = { package = "xmip-core-resilience-retry", git = "https://github.com/IlleNilsson/xmip-core-resilience-retry", branch = "main" }
+# The policy the tests hand a hub, allowing the Parties they subscribe as:
+# the party technology of the authorize capability, never a copy of it.
+authorize-party = { package = "xmip-core-authorize-party", git = "https://github.com/IlleNilsson/xmip-core-authorize-party", branch = "main" }
+# A test cluster's authority and each node's certificate. Test-only.
+rcgen = "0.13"
 
 [lints.rust]
 unsafe_code = "forbid"
