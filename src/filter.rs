@@ -11,10 +11,11 @@
 //! [`Filter::matches`].
 
 use observe::Scope;
+use serde_json::{Value, json};
 use xcore::PartyId;
 
-use crate::Event;
 use crate::outcome::Outcome;
+use crate::{Event, EventError};
 
 /// What a subscription asks for.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -103,13 +104,72 @@ impl Filter {
     }
 }
 
+impl Filter {
+    /// This filter as it travels to another node of the cluster, pushed
+    /// down so that only what it matches crosses (`cluster.rs`): JSON, the
+    /// outcomes by their words and the Party by its identifier.
+    #[must_use]
+    pub fn json(&self) -> Value {
+        let outcomes: Vec<&str> = self.outcomes.iter().map(|outcome| outcome.word()).collect();
+        json!({
+            "types": self.types,
+            "outcomes": outcomes,
+            "scope": self.scope,
+            "party": self.party.map(|party| party.to_string()),
+        })
+    }
+
+    /// The filter [`Self::json`] wrote.
+    ///
+    /// # Errors
+    /// Not an object of those members, an outcome no word names, or a
+    /// Party that is not an identifier.
+    pub fn read_json(value: &Value) -> Result<Self, EventError> {
+        let refused = |what: &str| EventError::new(format!("a filter whose {what} is not one"));
+        let texts = |name: &str| -> Result<Vec<&str>, EventError> {
+            value
+                .get(name)
+                .and_then(Value::as_array)
+                .ok_or_else(|| refused(name))?
+                .iter()
+                .map(|text| text.as_str().ok_or_else(|| refused(name)))
+                .collect()
+        };
+        let optional = |name: &str| -> Result<Option<&str>, EventError> {
+            match value.get(name) {
+                None | Some(Value::Null) => Ok(None),
+                Some(Value::String(text)) => Ok(Some(text)),
+                Some(_) => Err(refused(name)),
+            }
+        };
+        let outcomes = texts("outcomes")?
+            .into_iter()
+            .map(|word| Outcome::named(word).ok_or_else(|| refused("outcome")))
+            .collect::<Result<_, _>>()?;
+        let party = optional("party")?
+            .map(|party| party.parse::<PartyId>().map_err(|_| refused("party")))
+            .transpose()?;
+        Ok(Self {
+            types: texts("types")?.into_iter().map(str::to_string).collect(),
+            outcomes,
+            scope: optional("scope")?.map(str::to_string),
+            party,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use node::Stage;
 
+    /// The scope of the test cluster's node at `place`.
+    fn node(place: usize) -> String {
+        configure::fixture::test_cluster().node_scope(place)
+    }
+
     fn sent(outcome: Outcome) -> Event {
-        Event::completed(Stage::Send, outcome, "xmip:///c/node/n/send/billing")
+        Event::completed(Stage::Send, outcome, format!("{}/send/billing", node(0)))
             .about(PartyId::new(7))
     }
 
@@ -123,7 +183,7 @@ mod tests {
         let filter = Filter::everything()
             .of_type("se.xmip.send.failure")
             .ending(Outcome::Failure)
-            .beneath("xmip:///c/node/n")
+            .beneath(node(0))
             .about(PartyId::new(7));
 
         assert!(filter.matches(&sent(Outcome::Failure)));
@@ -141,16 +201,13 @@ mod tests {
     fn a_scope_holds_beneath_itself_and_never_beside() {
         let event = sent(Outcome::Success);
 
-        assert!(Filter::everything().beneath("xmip:///c").matches(&event));
+        let cluster = configure::fixture::test_cluster().scope();
+        assert!(Filter::everything().beneath(cluster).matches(&event));
         assert!(Filter::everything().beneath("xmip:///").matches(&event));
+        assert!(!Filter::everything().beneath(node(1)).matches(&event));
         assert!(
             !Filter::everything()
-                .beneath("xmip:///c/node/m")
-                .matches(&event)
-        );
-        assert!(
-            !Filter::everything()
-                .beneath("xmip:///c/node/n/send/billing/x")
+                .beneath(format!("{}/send/billing/x", node(0)))
                 .matches(&event),
             "never above"
         );
@@ -163,6 +220,21 @@ mod tests {
 
         assert!(!Filter::everything().about(PartyId::new(7)).matches(&event));
         assert_eq!(Filter::everything().reach(), "xmip:///");
+    }
+
+    #[test]
+    fn a_filter_crosses_to_another_node_as_it_was() {
+        let filter = Filter::everything()
+            .of_type("se.xmip.send.failure")
+            .ending(Outcome::ExhaustedRetries)
+            .beneath(node(0))
+            .about(PartyId::new(7));
+
+        for each in [Filter::everything(), filter] {
+            assert_eq!(Filter::read_json(&each.json()).expect("read"), each);
+        }
+        assert!(Filter::read_json(&json!({"types": [], "outcomes": ["late"]})).is_err());
+        assert!(Filter::read_json(&json!("every Event")).is_err());
     }
 
     #[test]

@@ -117,7 +117,19 @@ pub(crate) fn record(
     message: &str,
     properties: BTreeMap<String, String>,
 ) {
-    let audit = subscriber.audit.clone();
+    noted(&subscriber.audit, action, severity, message, properties);
+}
+
+/// One audit record in `audit`, kept on the keeper's thread: what a link
+/// between nodes records in the node's own audit.
+pub(crate) fn noted(
+    audit: &ProgramAudit,
+    action: &str,
+    severity: Severity,
+    message: &str,
+    properties: BTreeMap<String, String>,
+) {
+    let audit = audit.clone();
     let action = action.to_string();
     let message = message.to_string();
     later(move || kept(&audit, &action, severity, &message, properties));

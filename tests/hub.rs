@@ -12,13 +12,14 @@ use std::time::{Duration, Instant};
 
 use audit::keeper::settle;
 use audit::program_audit::ProgramAudit;
+use authorize_party::PartyPolicy;
 use node::Stage;
 use xcore::PartyId;
 use xmip_core_event::Event;
 use xmip_core_event::filter::Filter;
 use xmip_core_event::hub::Hub;
 use xmip_core_event::outcome::Outcome;
-use xmip_core_event::subscriber::{SameProcess, Subscriber};
+use xmip_core_event::subscriber::Subscriber;
 
 /// A directory of this test's own for the audit it writes.
 fn directory(name: &str) -> PathBuf {
@@ -40,11 +41,17 @@ fn audited(at: &Path) -> String {
 }
 
 fn hub() -> Hub {
-    Hub::new(vec![Arc::new(SameProcess)])
+    Hub::new(vec![Arc::new(PartyPolicy::new().allow(PartyId::new(42)))])
 }
 
 fn received(outcome: Outcome) -> Event {
-    Event::completed(Stage::Receive, outcome, "xmip:///c/node/n/receive/orders")
+    let node = configure::fixture::test_cluster().node_scope(0);
+    Event::completed(Stage::Receive, outcome, format!("{node}/receive/orders"))
+}
+
+/// The test cluster's scope.
+fn cluster() -> String {
+    configure::fixture::test_cluster().scope()
 }
 
 #[test]
@@ -53,7 +60,7 @@ fn a_subscription_receives_what_it_matches_and_the_delivery_is_audited() {
     let hub = hub();
     let failures = Filter::everything()
         .ending(Outcome::Failure)
-        .beneath("xmip:///c");
+        .beneath(cluster());
     let subscription = hub
         .subscribe(subscriber(&at), failures, 0)
         .expect("allowed");
@@ -169,7 +176,7 @@ fn a_publish_to_a_hundred_subscriptions_takes_microseconds() {
         .map(|_| {
             hub.subscribe(
                 subscriber(&at),
-                Filter::everything().beneath("xmip:///c"),
+                Filter::everything().beneath(cluster()),
                 4096,
             )
             .expect("allowed")

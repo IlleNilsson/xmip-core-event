@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use audit::keeper::settle;
 use audit::program_audit::ProgramAudit;
+use authorize_party::PartyPolicy;
 use node::Stage;
 use resilience::Guard;
 use retry::Retry;
@@ -19,7 +20,7 @@ use xmip_core_event::filter::Filter;
 use xmip_core_event::forward::{Forwarder, Wire};
 use xmip_core_event::hub::Hub;
 use xmip_core_event::outcome::Outcome;
-use xmip_core_event::subscriber::{SameProcess, Subscriber};
+use xmip_core_event::subscriber::Subscriber;
 
 /// A far end that refuses the first `refusing` attempts, then keeps what
 /// it is given and the Party it was carried to.
@@ -56,8 +57,8 @@ fn directory() -> PathBuf {
 #[test]
 fn an_event_is_kept_until_the_wire_takes_it_and_arrives_in_order() {
     let at = directory();
-    let hub = Hub::new(vec![Arc::new(SameProcess)]);
     let party = PartyId::new(9);
+    let hub = Hub::new(vec![Arc::new(PartyPolicy::new().allow(party))]);
     let subscriber =
         Subscriber::in_process(party, ProgramAudit::new("xmip-core-event tests", Some(&at)));
     let subscription = hub
@@ -73,8 +74,12 @@ fn an_event_is_kept_until_the_wire_takes_it_and_arrives_in_order() {
         Mode::Binary,
         Shared(Arc::clone(&far)),
     );
-    let first = Event::completed(Stage::Send, Outcome::Failure, "xmip:///c/node/n/send/b");
-    let second = Event::completed(Stage::Send, Outcome::Success, "xmip:///c/node/n/send/b");
+    let scope = format!(
+        "{}/send/b",
+        configure::fixture::test_cluster().node_scope(0)
+    );
+    let first = Event::completed(Stage::Send, Outcome::Failure, scope.as_str());
+    let second = Event::completed(Stage::Send, Outcome::Success, scope);
     hub.publish(first.clone());
     hub.publish(second.clone());
 

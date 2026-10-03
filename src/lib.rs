@@ -25,6 +25,11 @@
 //! The C boundary is `xmip_operate.h` section 11, forwarded by the
 //! runtime's library to [`hub::Hub::process`]; every language binds that.
 //!
+//! Any node is the cluster's door: [`cluster::Cluster`] links a node's hub
+//! to every other member, so a subscriber on any node hears the matching
+//! Events of all of them, each crossing one hop, once, only where a filter
+//! wants it (ADR-0065, amendment 2026-10-02).
+//!
 //! An operator lists what a hub holds ([`hub::Hub::standing`]) and pauses,
 //! resumes or removes an Event subscription ([`hub::Hub::act`], by
 //! `observe::Act`); a surface that reads a node's publication only leaves
@@ -34,12 +39,16 @@
 pub mod act;
 mod audit_trail;
 pub mod binding;
+pub mod cluster;
 pub mod filter;
 pub mod forward;
+pub mod gate;
 pub mod hub;
 pub mod json_format;
 pub mod listener;
 pub mod outcome;
+mod queue;
+mod signal;
 pub mod subscriber;
 pub mod wire;
 
@@ -191,8 +200,9 @@ mod tests {
 
     #[test]
     fn a_completed_action_is_typed_by_its_stage_and_outcome_and_minted_fresh() {
-        let one = Event::completed(Stage::Receive, Outcome::Success, "xmip:///c/node/n");
-        let two = Event::completed(Stage::Receive, Outcome::Success, "xmip:///c/node/n");
+        let node = configure::fixture::test_cluster().node_scope(0);
+        let one = Event::completed(Stage::Receive, Outcome::Success, node.as_str());
+        let two = Event::completed(Stage::Receive, Outcome::Success, node);
 
         assert_eq!(one.kind, "se.xmip.receive.success");
         assert_eq!(
@@ -205,7 +215,11 @@ mod tests {
 
     #[test]
     fn an_event_carries_references_never_content() {
-        let event = Event::completed(Stage::Send, Outcome::Failure, "xmip:///c/node/n/send/b")
+        let scope = format!(
+            "{}/send/b",
+            configure::fixture::test_cluster().node_scope(0)
+        );
+        let event = Event::completed(Stage::Send, Outcome::Failure, scope)
             .in_journey(JourneyId::new(1))
             .of_message(MessageId::new(2))
             .of_stream(StreamId::new(3))

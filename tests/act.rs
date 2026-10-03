@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 
 use audit::keeper::settle;
 use audit::program_audit::ProgramAudit;
+use authorize_party::PartyPolicy;
 use node::Stage;
 use observe::{Act, PauseState};
 use party::{Party, PartyKind};
@@ -20,9 +21,12 @@ use xmip_core_event::Event;
 use xmip_core_event::filter::Filter;
 use xmip_core_event::hub::Hub;
 use xmip_core_event::outcome::Outcome;
-use xmip_core_event::subscriber::{SameProcess, Subscriber};
+use xmip_core_event::subscriber::Subscriber;
 
-const NODE: &str = "xmip:///CT/node/alpha";
+/// The node the hub stands on: the test cluster's first.
+fn node() -> String {
+    configure::fixture::test_cluster().node_scope(0)
+}
 
 fn directory(name: &str) -> PathBuf {
     let at = std::env::temp_dir().join(format!("xmip-event-act-{name}-{}", std::process::id()));
@@ -43,14 +47,14 @@ fn audited(at: &Path) -> String {
 }
 
 fn hub() -> Hub {
-    Hub::new(vec![Arc::new(SameProcess)])
+    Hub::new(vec![Arc::new(PartyPolicy::new().allow(PartyId::new(42)))])
 }
 
 fn received() -> Event {
     Event::completed(
         Stage::Receive,
         Outcome::Success,
-        "xmip:///CT/node/alpha/receive/a",
+        format!("{}/receive/a", node()),
     )
 }
 
@@ -82,13 +86,13 @@ fn a_paused_subscription_keeps_queuing_hands_nothing_over_and_counts_what_it_mis
     );
     assert!(started.elapsed() >= Duration::from_millis(25), "it waited");
 
-    let [standing] = hub.standing(NODE).try_into().expect("one");
+    let [standing] = hub.standing(&node()).try_into().expect("one");
     assert_eq!(standing.state, PauseState::Paused);
     assert_eq!(
         (standing.queued, standing.missed, standing.delivered),
         (2, 1, 0)
     );
-    assert_eq!(standing.node, NODE);
+    assert_eq!(standing.node, node());
     assert_eq!(
         standing.subscriber, "operations",
         "the name it was declared with"
@@ -140,8 +144,8 @@ fn resuming_hands_over_what_queued_and_wakes_a_waiting_drain() {
         "resume wakes the drain at once: {:?}",
         woke.duration_since(resumed_at)
     );
-    assert_eq!(hub.standing(NODE)[0].delivered, 1);
-    assert_eq!(hub.standing(NODE)[0].state, PauseState::Active);
+    assert_eq!(hub.standing(&node())[0].delivered, 1);
+    assert_eq!(hub.standing(&node())[0].state, PauseState::Active);
     assert!(audited(&at).contains("action = \"event.resume\""));
     drop(subscription);
     let _ = fs::remove_dir_all(&at);
@@ -159,7 +163,7 @@ fn removing_ends_it_its_holder_finds_it_closed_and_a_second_act_is_refused() {
     let said = hub.act(id, Act::Remove, "ilian").expect("removed");
     assert!(said.contains("removed by ilian"), "{said}");
     assert_eq!(hub.subscriptions(), 0);
-    assert!(hub.standing(NODE).is_empty());
+    assert!(hub.standing(&node()).is_empty());
     assert!(subscription.is_closed());
     assert_eq!(hub.publish(received()), 0, "nothing reaches it");
     assert!(

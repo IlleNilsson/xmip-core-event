@@ -325,22 +325,22 @@ fn a_message_without_specversion_is_no_wire_event() {
 
 #[test]
 fn an_xmip_event_rides_every_binding_in_both_modes_and_comes_back_itself() {
-    let event = Event::completed(
-        Stage::Send,
-        Outcome::Failure,
-        "xmip:///c/node/n/send/billing",
-    )
-    .in_journey(JourneyId::new(11))
-    .of_message(MessageId::new(12))
-    .at_endpoint("https://billing.example/in")
-    .by_module("xmip-core-transport-http")
-    .on_artifact("billing")
-    .about(PartyId::new(13))
-    .saying("status", "503");
+    let scope = format!(
+        "{}/send/billing",
+        configure::fixture::test_cluster().node_scope(0)
+    );
+    let event = Event::completed(Stage::Send, Outcome::Failure, scope.as_str())
+        .in_journey(JourneyId::new(11))
+        .of_message(MessageId::new(12))
+        .at_endpoint("https://billing.example/in")
+        .by_module("xmip-core-transport-http")
+        .on_artifact("billing")
+        .about(PartyId::new(13))
+        .saying("status", "503");
     let wire_event = WireEvent::from_event(&event);
 
     assert_eq!(wire_event.kind, "se.xmip.send.failure");
-    assert_eq!(wire_event.source, "xmip:///c/node/n/send/billing");
+    assert_eq!(wire_event.source, scope);
     assert_eq!(wire_event.subject.as_deref(), Some("billing"));
     assert_eq!(wire_event.event().expect("an Xmip Event"), event);
 

@@ -21,8 +21,13 @@ be told. Delivery is not in the message path and no Journey waits for it.
   and the authorization gate decides, once, when it subscribes:
   `authorize::authorize` for a Send at the scope it reaches, each Event type
   as the Contract. Nothing configured is a refusal. A program in this
-  process is `peer-credentials` naming the process, and `SameProcess` is
-  the policy that admits it and nothing else.
+  process is `peer-credentials` naming the process, resolved to the Party it
+  names, and being here admits it to nothing (ADR-0065, amendment
+  2026-09-26): the hub's gate (`gate`) is the one policy list it is handed
+  by `Hub::authorize_by` — the node's as it starts, or one the program
+  hosting the hub takes from the authorize capability (for "these Parties",
+  `xmip-core-authorize-party`'s `PartyPolicy`, which this crate's tests use). `Hub::process`
+  admits nobody until it is handed one.
 - **In process.** `hub::Hub` fans an Event out to every matching
   subscription through a bounded queue each and never waits for a
   subscriber: a full queue refuses the Event for that subscriber and counts
@@ -58,6 +63,35 @@ be told. Delivery is not in the message path and no Journey waits for it.
   (ADR-0065, amendment 2026-09-29). The handle a subscriber holds is
   `hub::EventSubscription`, so no identifier here reads as a Subscription,
   which picks a published Message up (ADR-0013, amendment 2026-09-30).
+- **Any node is the cluster's door** (ADR-0065, amendments 2026-09-26 and
+  2026-10-02; `cluster`). A subscriber on whichever node it reaches hears
+  the matching Events of every node in the cluster. `cluster::Cluster::join`
+  puts a hub's node in the cluster: its sync listener (ADR-0067) answers the
+  other members with this node's own Events, and it holds one link to each
+  other member, over Xmip's mutual
+  TLS (ADR-0063, `tls::duplex`), pushing its subscriptions' filters down so
+  only what they match crosses — nothing while there are none (`cluster::link`, agreed as `xmip-event/1`).
+  A member answers from its own Events only, so an Event crosses at most
+  one hop, once, and never comes back; it is pushed the moment it is
+  raised. The Party is authorized where it subscribed; a link presents the
+  node's certificate and is authorized as a node. A subscribe returns once
+  every member that can be reached carries its filter. Which nodes are
+  members, and where they listen, is `cluster::Membership`'s — Xmip
+  Storage's administration database in a node — read again by
+  `Cluster::follow` and every `follow_every`; a member joining is linked, one
+  leaving unlinked. A member that is down is tried again on its own link's
+  thread, sooner first and then once a second, and until it is heard again
+  it is unheard, and nothing missing is silent: every `Delivery` carries
+  who is unheard now — by which node, the member, since when and why, as
+  `observe::Unheard` — and a change wakes a waiting drain with no Event
+  (`unheard_changed`); `Hub::unheard` answers the same for the node's
+  publication, where every operator surface reads it as *not hearing
+  `<node>` since `<time>`: `<why>`* (`observe::Unheard::said`); and the
+  node's audit records it as `event.link`. What
+  a link's queue on the far node refused crosses as a count and is missed
+  on the subscriptions it matched. A link is the cluster's and not a
+  Party's: it is not an Event subscription, `Hub::standing` does not list it
+  and `Hub::act` does not reach it.
 - **Audited.** Every subscription, delivery, refusal and forward is recorded
   in the subscriber's program audit (ADR-0062), handed to the audit
   capability's keeper (`audit::keeper`) so no Event waits for a disk and

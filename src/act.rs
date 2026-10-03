@@ -33,19 +33,28 @@ impl Hub {
             )));
         };
         let said = match act {
-            Act::Pause if slot.hold(true) => format!(
+            Act::Pause if slot.queue.hold(true) => format!(
                 "subscription {id} paused by {who}; it keeps queuing up to its capacity \
                  and hands nothing over until it is resumed"
             ),
             Act::Pause => format!("subscription {id} was already paused"),
-            Act::Resume if slot.hold(false) => {
+            Act::Resume if slot.queue.hold(false) => {
                 format!("subscription {id} resumed by {who}; what queued is handed over")
             }
             Act::Resume => format!("subscription {id} was not paused"),
             Act::Remove => {
-                slot.close();
+                slot.queue.close();
                 self.forget(id);
                 format!("subscription {id} removed by {who}")
+            }
+            // No act an Event subscription takes: refused in observe's words.
+            Act::Replay => {
+                return Err(EventError::new(
+                    Noun::EventSubscription
+                        .act(act.word())
+                        .err()
+                        .unwrap_or_default(),
+                ));
             }
         };
 
