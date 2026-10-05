@@ -48,7 +48,7 @@ impl Hub {
                 format!("subscription {id} removed by {who}")
             }
             // No act an Event subscription takes: refused in observe's words.
-            Act::Replay => {
+            Act::Replay | Act::Retry | Act::Dismiss => {
                 return Err(EventError::new(
                     Noun::EventSubscription
                         .act(act.word())
