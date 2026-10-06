@@ -96,7 +96,7 @@ pub struct Event {
     pub endpoint: Option<String>,
     /// The Module that acted, by name.
     pub module: Option<String>,
-    /// The Artifact: a Receive Location, an Xmip Process, a Send Location.
+    /// The Artifact: a Receive Location, a Work Process, a Send Location.
     pub artifact: Option<String>,
     /// The Party it is about.
     pub party: Option<PartyId>,
