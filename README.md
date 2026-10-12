@@ -65,7 +65,9 @@ be told. Delivery is not in the message path and no Journey waits for it.
   which picks a published Message up (ADR-0013, amendment 2026-09-30).
 - **Any node is the cluster's door** (ADR-0065, amendments 2026-09-26 and
   2026-10-02; `cluster`). A subscriber on whichever node it reaches hears
-  the matching Events of every node in the cluster. `cluster::Cluster::join`
+  the matching Events of every node in the cluster. Connecting to a node
+  where its Events are raised saves the one hop they would cross; it is a
+  choice, never required (amendment 2026-10-12). `cluster::Cluster::join`
   puts a hub's node in the cluster: its sync listener (ADR-0067) answers the
   other members with this node's own Events, and it holds one link to each
   other member, over Xmip's mutual
