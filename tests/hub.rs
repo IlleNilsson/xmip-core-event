@@ -14,7 +14,7 @@ use audit::keeper::settle;
 use audit::program_audit::ProgramAudit;
 use authorize_party::PartyPolicy;
 use node::Stage;
-use xcore::PartyId;
+use xcore::{PartyId, Severity};
 use xmip_core_event::Event;
 use xmip_core_event::filter::Filter;
 use xmip_core_event::hub::Hub;
@@ -97,7 +97,8 @@ fn a_subscriber_the_gate_refuses_gets_no_subscription_and_the_refusal_is_audited
     assert!(said.contains("no policy is configured"), "{said}");
     assert_eq!(closed.subscriptions(), 0);
     let audit = audited(&at);
-    assert!(audit.contains("severity = \"warning\""), "{audit}");
+    let warning = format!("severity = \"{}\"", Severity::Warning.word());
+    assert!(audit.contains(&warning), "{audit}");
     assert!(audit.contains("no policy is configured"), "{audit}");
     let _ = fs::remove_dir_all(&at);
 }
