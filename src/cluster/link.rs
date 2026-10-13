@@ -18,9 +18,9 @@
 //! Each is one frame (`net::frame`): its kind in the first byte, then
 //! JSON. Nothing here opens a connection.
 
-use std::io::{ErrorKind, Read};
+use std::io::Read;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use serde_json::{Value, json};
 
@@ -134,46 +134,8 @@ impl Frame {
     }
 }
 
-/// A link's reading side, read until its side ends or the peer falls
-/// silent: a read that waited [`WATCH`] with nothing come is tried again,
-/// and nothing read is lost by it.
-pub(crate) struct Watched<R, E> {
-    pub(crate) reading: R,
-    /// Whether its side is ending.
-    pub(crate) ending: E,
-    /// How long the peer may say nothing, where it must beat.
-    pub(crate) silence: Option<Duration>,
-    pub(crate) heard: Instant,
-}
-
-impl<R: Read, E: Fn() -> bool> Read for Watched<R, E> {
-    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-        loop {
-            match self.reading.read(buffer) {
-                Err(error)
-                    if matches!(error.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) =>
-                {
-                    if (self.ending)() {
-                        return Err(ErrorKind::ConnectionAborted.into());
-                    }
-                    if self
-                        .silence
-                        .is_some_and(|silence| self.heard.elapsed() > silence)
-                    {
-                        return Err(std::io::Error::new(
-                            ErrorKind::TimedOut,
-                            "the node fell silent",
-                        ));
-                    }
-                }
-                read => {
-                    self.heard = Instant::now();
-                    return read;
-                }
-            }
-        }
-    }
-}
+/// A link's reading side: `net::watched`'s, the one in the estate.
+pub(crate) use net::watched::Watched;
 
 /// The next frame off `reading`, `None` where the peer closed between
 /// frames.
