@@ -134,7 +134,7 @@ fn nothing_published_is_an_empty_delivery_after_the_timeout() {
     let started = Instant::now();
     let delivery = subscription.next(Duration::from_millis(20), 16);
 
-    assert!(delivery.events.is_empty());
+    assert_eq!(delivery.events, [] as [Arc<Event>; 0]);
     assert!(started.elapsed() >= Duration::from_millis(20));
     let _ = fs::remove_dir_all(&at);
 }
