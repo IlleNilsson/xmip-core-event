@@ -14,7 +14,7 @@ use audit::keeper::settle;
 use audit::program_audit::ProgramAudit;
 use authorize_party::PartyPolicy;
 use node::Stage;
-use observe::{Act, PauseState};
+use observe::{Act, EventSubscription, PauseState};
 use party::{Party, PartyKind};
 use xcore::PartyId;
 use xmip_core_event::Event;
@@ -163,14 +163,12 @@ fn removing_ends_it_its_holder_finds_it_closed_and_a_second_act_is_refused() {
     let said = hub.act(id, Act::Remove, "ilian").expect("removed");
     assert!(said.contains("removed by ilian"), "{said}");
     assert_eq!(hub.subscriptions(), 0);
-    assert!(hub.standing(&node()).is_empty());
+    assert_eq!(hub.standing(&node()), [] as [EventSubscription; 0]);
     assert!(subscription.is_closed());
     assert_eq!(hub.publish(received()), 0, "nothing reaches it");
-    assert!(
-        subscription
-            .next(Duration::from_secs(5), 1)
-            .events
-            .is_empty()
+    assert_eq!(
+        subscription.next(Duration::from_secs(5), 1).events,
+        [] as [Arc<Event>; 0]
     );
 
     for act in Act::ALL {
