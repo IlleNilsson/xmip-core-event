@@ -39,6 +39,9 @@ tls = { package = "xmip-core-library-tls", git = "https://github.com/IlleNilsson
 serde_json = "1"
 
 [dev-dependencies]
+# The latency tests' figures and Xmip's own processor time
+# (`xcore::latency`, `xcore::processor_time`). Test-only.
+xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main", features = ["uuid-v7", "test-support"] }
 # The test cluster's names, from its `xmip.toml` (`configure::fixture`;
 # ADR-0056, amendment 2026-10-03): no test writes a cluster or node name.
 configure = { package = "xmip-core-configure", git = "https://github.com/IlleNilsson/xmip-core-configure", branch = "main", features = ["test-support"] }
