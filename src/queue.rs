@@ -7,8 +7,10 @@
 //! go of. Closed, it takes nothing more and wakes whoever waits.
 
 use std::collections::VecDeque;
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
+
+use xcore::wake::Wake;
 
 use crate::Event;
 use crate::hub::Delivery;
@@ -17,7 +19,7 @@ use crate::hub::Delivery;
 pub(crate) struct Queue {
     capacity: usize,
     state: Mutex<State>,
-    ready: Condvar,
+    ready: Wake,
 }
 
 /// What the queue holds and has done.
@@ -43,7 +45,7 @@ impl Queue {
         Self {
             capacity,
             state: Mutex::new(State::default()),
-            ready: Condvar::new(),
+            ready: Wake::new(),
         }
     }
 
@@ -92,12 +94,11 @@ impl Queue {
         let state = self.state();
         let (mut state, _) = self
             .ready
-            .wait_timeout_while(state, timeout, |state| {
+            .wait_timeout_while(&self.state, state, timeout, |state| {
                 !state.closed
                     && (state.paused
                         || (state.events.is_empty() && state.refused == 0 && !state.told))
-            })
-            .unwrap_or_else(PoisonError::into_inner);
+            });
         if state.paused {
             return Delivery::default();
         }

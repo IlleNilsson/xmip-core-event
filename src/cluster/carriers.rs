@@ -14,8 +14,10 @@
 //! so a subscribe after it waits only the round trip.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
+
+use xcore::wake::Wake;
 
 use crate::filter::Filter;
 use crate::hub::Hub;
@@ -41,7 +43,7 @@ enum Carrying {
 #[derive(Default)]
 pub(crate) struct Carriers {
     state: Mutex<State>,
-    ready: Condvar,
+    ready: Wake,
 }
 
 #[derive(Default)]
@@ -103,8 +105,7 @@ impl Carriers {
         let state = self.lock();
         let (mut state, _) = self
             .ready
-            .wait_timeout_while(state, SETTLE, behind)
-            .unwrap_or_else(PoisonError::into_inner);
+            .wait_timeout_while(&self.state, state, SETTLE, behind);
         !behind(&mut state)
     }
 
@@ -114,12 +115,11 @@ impl Carriers {
         let state = self.lock();
         let _ = self
             .ready
-            .wait_timeout_while(state, most, |state| {
+            .wait_timeout_while(&self.state, state, most, |state| {
                 links
                     .iter()
                     .any(|link| state.links.get(link) == Some(&Carrying::Making))
-            })
-            .unwrap_or_else(PoisonError::into_inner);
+            });
     }
 
     fn set(&self, link: u64, carrying: Carrying) {
