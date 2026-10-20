@@ -12,7 +12,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
@@ -97,9 +97,10 @@ impl Serving {
         if self.serve.stopping.swap(true, Ordering::SeqCst) {
             return;
         }
-        let _ = net::connect(wakeable(self.address), Some(WAKE));
+        // Knocked until it has heard (`net::accepting`).
         if let Some(accepting) = self.accepting.take() {
-            let _ = accepting.join();
+            let address = self.address;
+            let _ = net::accepting::woken(accepting, WAKE, || net::accepting::knock(address, WAKE));
         }
         let served =
             std::mem::take(&mut *self.served.lock().unwrap_or_else(PoisonError::into_inner));
@@ -112,16 +113,6 @@ impl Serving {
 impl Drop for Serving {
     fn drop(&mut self) {
         self.stop();
-    }
-}
-
-/// An address a connection reaches the listener at: loopback where it
-/// listens on every address.
-fn wakeable(address: SocketAddr) -> SocketAddr {
-    match address.ip() {
-        IpAddr::V4(ip) if ip.is_unspecified() => (Ipv4Addr::LOCALHOST, address.port()).into(),
-        IpAddr::V6(ip) if ip.is_unspecified() => (Ipv6Addr::LOCALHOST, address.port()).into(),
-        _ => address,
     }
 }
 
