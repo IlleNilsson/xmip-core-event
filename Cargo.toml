@@ -30,7 +30,7 @@ observe = { package = "xmip-core-observe", git = "https://github.com/IlleNilsson
 resilience = { package = "xmip-core-resilience", git = "https://github.com/IlleNilsson/xmip-core-resilience", branch = "main" }
 # RFC 3339 for an Event's time and base64 for binary data: codec's.
 codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
-# The HTTP binding's percent-encoding of a header value: net's one writer.
+# A link's frames, its watched reading side and its connect: net's.
 net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
 # The Event link between nodes: Xmip's own mutual TLS (ADR-0063), its two
 # directions on two threads (tls::duplex), and net's frames.
