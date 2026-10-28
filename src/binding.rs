@@ -15,7 +15,7 @@
 //! transport in its request, Kafka in its record, AMQP in its content
 //! header — and nothing here opens a connection.
 
-use net::percent::{decode_strict, encode_keeping};
+use codec::percent::{decode_strict, encode_keeping};
 use serde_json::Value;
 
 use crate::EventError;
