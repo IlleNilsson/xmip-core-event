@@ -10,7 +10,7 @@ outside. References, never payload copies.
 
 An Event is not an audit record and not a Message. Audit is the durable
 record Xmip keeps for itself; an Event leaves Xmip for a Party that asked to
-be told. Delivery is not in the message path and no Journey waits for it.
+be told. Delivery is not in the message path and no Message waits for it.
 
 ## One model, subscribed two ways (ADR-0065)
 
