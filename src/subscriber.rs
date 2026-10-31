@@ -18,7 +18,7 @@
 
 use audit::program_audit::ProgramAudit;
 use authorize::{Action, Attempt, Authorizer, Decision, authorize};
-use context::{Alignment, AuthenticatedIdentity, IdentityFacts, OnMisalignment, Verified};
+use context::{Alignment, AuthenticatedIdentity, IdentityFacts, Minimum, OnMisalignment, Verified};
 use party::Party;
 use xcore::{Clock, Established, PartyId, SystemClock, mechanism};
 
@@ -99,7 +99,15 @@ impl Subscriber {
 
         attempts
             .iter()
-            .map(|attempt| authorize(policies, &self.identity, attempt, OnMisalignment::Accept))
+            .map(|attempt| {
+                authorize(
+                    policies,
+                    &self.identity,
+                    attempt,
+                    OnMisalignment::Accept,
+                    Minimum::default(),
+                )
+            })
             .find(|decision| !decision.allowed())
             .unwrap_or(Decision::Allowed)
     }
