@@ -21,14 +21,11 @@
 //! the tail are printed and held by nothing: on a machine busy on every
 //! processor they measure the scheduler.
 
-#[path = "cluster/test_cluster.rs"]
-mod test_cluster;
-
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use test_cluster::{Authority, Roster, TestNode, failures, name};
+use super::test_cluster::{Authority, Roster, TestNode, failures, name};
 use xcore::latency::{PlainWake, spread};
 use xcore::processor_time::ProcessorTime;
 use xmip_core_event::outcome::Outcome;

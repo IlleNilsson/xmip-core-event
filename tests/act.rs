@@ -131,19 +131,14 @@ fn resuming_hands_over_what_queued_and_wakes_a_waiting_drain() {
         (delivery, subscription)
     });
     std::thread::sleep(Duration::from_millis(20));
-    let resumed_at = Instant::now();
     let said = hub.act(id, Act::Resume, "ilian").expect("resumed");
     assert!(said.contains("resumed by ilian"), "{said}");
 
-    let woke = told.recv_timeout(Duration::from_secs(5)).expect("woke");
+    // How soon is the timing program's (tests/measured/act.rs).
+    told.recv_timeout(Duration::from_secs(5)).expect("woke");
     let (delivery, subscription) = waiting.join().expect("joined");
     assert_eq!(delivery.events.len(), 1);
     assert_eq!(*delivery.events[0], first);
-    assert!(
-        woke.duration_since(resumed_at) < Duration::from_millis(1),
-        "resume wakes the drain at once: {:?}",
-        woke.duration_since(resumed_at)
-    );
     assert_eq!(hub.standing(&node())[0].delivered, 1);
     assert_eq!(hub.standing(&node())[0].state, PauseState::Active);
     assert!(audited(&at).contains("action = \"event.resume\""));

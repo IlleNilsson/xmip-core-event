@@ -103,9 +103,13 @@ be told. Delivery is not in the message path and no Message waits for it.
 ## Near real time
 
 The owner, 2026-09-26: an Event reaches an in-process subscriber within
-about a millisecond of being published. `tests/latency.rs` measures publish
-to receipt, drained and called back, and asserts it; `tests/hub.rs`
-measures what a publish costs the publisher. Measured on the owner's
+about a millisecond of being published. The module's timing program,
+`tests/measured`, run after the other tests alone and one test at a time
+(`doc/governance/rust-style.md` section 5c), holds it: `latency.rs`
+measures publish to receipt, drained and called back, and asserts it;
+`cluster_latency.rs` what crossing to another node adds; `hub.rs` what a
+publish costs the publisher; `act.rs` how soon a resume wakes a waiting
+drain. Measured on the owner's
 Windows machine, release build: a publish to one matching subscription
 about 0.7 µs, to a hundred about 15 µs; publish to receipt a median of
 about 40 µs and a 99th percentile under 100 µs.

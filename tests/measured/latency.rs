@@ -42,10 +42,6 @@ const ROUNDS: usize = 500;
 /// The bound: about a millisecond.
 const BOUND: Duration = Duration::from_millis(1);
 
-/// The two measurements take turns: each is its own load, and one running
-/// beside the other would be measured as the machine's.
-static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
-
 fn directory(name: &str) -> PathBuf {
     let at = std::env::temp_dir().join(format!("xmip-event-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&at);
@@ -115,7 +111,6 @@ fn hold(what: &str, taken: Vec<Duration>, published: Published, subscribing: Dur
 
 #[test]
 fn an_event_reaches_a_waiting_subscriber_within_a_millisecond() {
-    let _turn = ONE_AT_A_TIME.lock();
     let at = directory("latency-next");
     let hub = Arc::new(allowing());
     let subscription = hub
@@ -153,7 +148,6 @@ fn an_event_reaches_a_waiting_subscriber_within_a_millisecond() {
 
 #[test]
 fn an_event_reaches_a_listener_within_a_millisecond() {
-    let _turn = ONE_AT_A_TIME.lock();
     let at = directory("latency-listen");
     let hub = allowing();
     let sent = Arc::new(Mutex::new(Vec::new()));

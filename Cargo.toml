@@ -38,6 +38,14 @@ tls = { package = "xmip-core-library-tls", git = "https://github.com/IlleNilsson
 # The wire event's JSON format, read and written as the estate reads JSON.
 serde_json = "1"
 
+# The module's timing program (doc/governance/rust-style.md section 5c): a
+# plain cargo test leaves it out, and the landing runs it after every other
+# test here, alone, one test at a time, so what it measures is Xmip's work.
+[[test]]
+name = "measured"
+path = "tests/measured/main.rs"
+test = false
+
 [dev-dependencies]
 # The latency tests' figures and Xmip's own processor time
 # (`xcore::latency`, `xcore::processor_time`). Test-only.

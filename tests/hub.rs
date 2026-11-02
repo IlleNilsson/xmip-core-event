@@ -1,8 +1,9 @@
 //! The in-process hub: a subscription receives what its filter matches and
 //! nothing else, a refused subscriber receives nothing, a full queue never
-//! holds the publisher, every delivery and refusal is audited, and a
-//! publish costs microseconds — measured here, because anything over a
-//! millisecond apart from load is a defect (CONTRIBUTING.md).
+//! holds the publisher, and every delivery and refusal is audited. That a
+//! publish costs microseconds is measured in the module's timing program
+//! (`tests/measured/hub.rs`), because anything over a millisecond apart
+//! from load is a defect (CONTRIBUTING.md).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -164,48 +165,5 @@ fn a_listener_is_called_back_on_its_own_thread_until_dropped() {
     assert_ne!(thread, publisher, "never on the publisher's thread");
     drop(listener);
     assert_eq!(hub.subscriptions(), 0, "dropping the listener unsubscribes");
-    let _ = fs::remove_dir_all(&at);
-}
-
-/// The millisecond rule, measured: one publish to a hundred subscriptions,
-/// every one of which matches.
-#[test]
-fn a_publish_to_a_hundred_subscriptions_takes_microseconds() {
-    let at = directory("cost");
-    let hub = hub();
-    let subscriptions: Vec<_> = (0..100)
-        .map(|_| {
-            hub.subscribe(
-                subscriber(&at),
-                Filter::everything().beneath(cluster()),
-                4096,
-            )
-            .expect("allowed")
-        })
-        .collect();
-    let events: Vec<Event> = (0..1000).map(|_| received(Outcome::Success)).collect();
-
-    let started = Instant::now();
-    for event in events {
-        hub.publish(event);
-    }
-    let each = started.elapsed() / 1000;
-
-    println!("one publish to 100 matching subscriptions: {each:?}");
-    assert!(each < Duration::from_millis(1), "a publish took {each:?}");
-    drop(subscriptions);
-
-    let one = hub
-        .subscribe(subscriber(&at), Filter::everything(), 4096)
-        .expect("allowed");
-    let events: Vec<Event> = (0..1000).map(|_| received(Outcome::Success)).collect();
-    let started = Instant::now();
-    for event in events {
-        hub.publish(event);
-    }
-    let each = started.elapsed() / 1000;
-    println!("one publish to 1 matching subscription: {each:?}");
-    assert!(each < Duration::from_millis(1), "a publish took {each:?}");
-    drop(one);
     let _ = fs::remove_dir_all(&at);
 }
