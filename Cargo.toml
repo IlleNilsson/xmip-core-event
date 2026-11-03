@@ -59,7 +59,7 @@ retry = { package = "xmip-core-resilience-retry", git = "https://github.com/Ille
 # the party technology of the authorize capability, never a copy of it.
 authorize-party = { package = "xmip-core-authorize-party", git = "https://github.com/IlleNilsson/xmip-core-authorize-party", branch = "main" }
 # A test cluster's authority and each node's certificate. Test-only.
-rcgen = "0.13"
+rcgen = "0.14"
 
 [lints.rust]
 unsafe_code = "forbid"

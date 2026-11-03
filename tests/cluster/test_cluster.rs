@@ -50,8 +50,7 @@ pub fn node(name: &str) -> String {
 
 /// The cluster's authority, as PEM, and what issues with it.
 pub struct Authority {
-    pem: String,
-    issuer: rcgen::CertifiedKey,
+    issuer: rcgen::CertifiedIssuer<'static, rcgen::KeyPair>,
 }
 
 impl Authority {
@@ -60,14 +59,8 @@ impl Authority {
         let mut params = rcgen::CertificateParams::new(Vec::<String>::new()).expect("params");
         params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
         let key = rcgen::KeyPair::generate().expect("a key");
-        let cert = params.self_signed(&key).expect("self-signed");
-        Self {
-            pem: cert.pem(),
-            issuer: rcgen::CertifiedKey {
-                cert,
-                key_pair: key,
-            },
-        }
+        let issuer = rcgen::CertifiedIssuer::self_signed(params, key).expect("self-signed");
+        Self { issuer }
     }
 
     /// A node's certificate, its key and the anchors, as PEM.
@@ -77,10 +70,8 @@ impl Authority {
         let params =
             rcgen::CertificateParams::new(vec!["localhost".to_string(), "127.0.0.1".to_string()])
                 .expect("params");
-        let leaf = params
-            .signed_by(&key, &self.issuer.cert, &self.issuer.key_pair)
-            .expect("issued");
-        (leaf.pem(), key.serialize_pem(), self.pem.clone())
+        let leaf = params.signed_by(&key, &self.issuer).expect("issued");
+        (leaf.pem(), key.serialize_pem(), self.issuer.pem())
     }
 
     /// A node's identity, as the link presents and checks it.
