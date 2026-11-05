@@ -115,4 +115,4 @@ about 0.7 µs, to a hundred about 15 µs; publish to receipt a median of
 about 40 µs and a 99th percentile under 100 µs.
 
 `doc/architecture/runtime-model.md` section 17, *Eventing*, governs it, and
-ADR-0065 decides it; `architecture.toml` carries the maturity.
+ADR-0065 decides it; `architecture.xmip` carries the maturity.

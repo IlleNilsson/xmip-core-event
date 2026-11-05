@@ -1,7 +1,7 @@
 //! A test cluster: one authority, a certificate per node issued by it for
 //! `localhost`, a roster of members a test changes as nodes join and leave,
 //! and a node — a hub joined to the cluster on a sync listener of its own.
-//! The cluster and its nodes are named by the test cluster's `xmip.toml`,
+//! The cluster and its nodes are named by the test cluster's `cluster.xmip`,
 //! through configure's fixture, as every test run is.
 
 #![allow(dead_code)]
