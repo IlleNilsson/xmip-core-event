@@ -252,7 +252,6 @@ impl Follow {
             upstreams.remove(&node);
             self.said(Severity::Information, &format!("{node} left, or moved"));
         }
-        let mut started = Vec::new();
         for (node, member) in wanted {
             if upstreams.contains_key(&node) {
                 continue;
@@ -260,7 +259,6 @@ impl Follow {
             let following = (&self.hub, self.node.as_str(), &self.config, &self.audit);
             match Upstream::start(following, member.clone()) {
                 Ok(upstream) => {
-                    started.push(upstream.link);
                     upstreams.insert(node.clone(), (member, upstream));
                     self.said(Severity::Information, &format!("{node} followed"));
                 }
@@ -273,12 +271,19 @@ impl Follow {
                 }
             }
         }
+        // Every member followed is linked, or said unheard, before this
+        // ends: the links this reading started, and those another reading
+        // started that are still being made — the following thread and
+        // `Cluster::follow` read at once, and either may start a link.
+        let held: Vec<u64> = upstreams
+            .values()
+            .map(|(_, upstream)| upstream.link)
+            .collect();
         drop(upstreams);
-        // A member followed is linked, or said unheard, before this ends.
         self.hub
             .inner
             .carriers
-            .made_all(&started, upstream::CONNECT + link::HANDSHAKE);
+            .made_all(&held, upstream::CONNECT + link::HANDSHAKE);
     }
 
     fn said(&self, severity: Severity, message: &str) {
