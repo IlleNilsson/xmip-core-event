@@ -156,7 +156,7 @@ fn a_listener_is_called_back_on_its_own_thread_until_dropped() {
         })
         .expect("a thread");
     let event = received(Outcome::Success);
-    hub.publish(event.clone());
+    let _ = hub.publish(event.clone());
 
     let (id, thread) = told
         .recv_timeout(Duration::from_secs(2))

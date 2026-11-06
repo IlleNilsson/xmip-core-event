@@ -43,9 +43,10 @@ mod upstream;
 use std::collections::BTreeMap;
 use std::net::{SocketAddr, TcpListener};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
+use xcore::lock::Locked;
 
 use audit::program_audit::ProgramAudit;
 use xcore::Severity;
@@ -173,8 +174,7 @@ impl Cluster {
     pub fn members(&self) -> Vec<Member> {
         self.following
             .upstreams
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+            .locked()
             .values()
             .map(|(member, _)| member.clone())
             .collect()
@@ -212,12 +212,7 @@ impl Follow {
             self.read();
             self.signal.wait(seen, self.every);
         }
-        let upstreams = std::mem::take(
-            &mut *self
-                .upstreams
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner),
-        );
+        let upstreams = std::mem::take(&mut *self.upstreams.locked());
         drop(upstreams);
     }
 
@@ -239,10 +234,7 @@ impl Follow {
             .filter(|member| member.node != self.node)
             .map(|member| (member.node.clone(), member))
             .collect();
-        let mut upstreams = self
-            .upstreams
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut upstreams = self.upstreams.locked();
         let gone: Vec<String> = upstreams
             .iter()
             .filter(|(node, (member, _))| wanted.get(*node) != Some(member))

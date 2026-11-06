@@ -42,7 +42,7 @@ fn a_resume_wakes_a_waiting_drain_within_a_millisecond() {
     let id = subscription.id();
     hub.act(id, Act::Pause, "ilian").expect("paused");
     let node = configure::fixture::test_cluster().node_scope(0);
-    hub.publish(Event::completed(
+    let _ = hub.publish(Event::completed(
         Stage::Receive,
         Outcome::Success,
         format!("{node}/receive/a"),

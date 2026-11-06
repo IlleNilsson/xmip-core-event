@@ -12,7 +12,8 @@
 //! records rather than one each.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
+use xcore::lock::Locked;
 
 use audit::keeper::later;
 use audit::program_audit::ProgramAudit;
@@ -42,7 +43,7 @@ impl Deliveries {
         if delivery.events.is_empty() && delivery.refused == 0 {
             return;
         }
-        let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut pending = self.pending.locked();
         pending
             .delivered
             .extend(delivery.events.iter().map(|event| event.id));
@@ -61,7 +62,7 @@ impl Deliveries {
     /// Record everything noted so far, on the keeper's thread.
     fn keep(&self, audit: &ProgramAudit, party: PartyId) {
         let (delivered, refused) = {
-            let mut pending = self.pending.lock().unwrap_or_else(PoisonError::into_inner);
+            let mut pending = self.pending.locked();
             pending.queued = false;
             (
                 std::mem::take(&mut pending.delivered),

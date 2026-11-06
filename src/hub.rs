@@ -27,8 +27,9 @@
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError, RwLock, Weak};
+use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
 use std::time::Duration;
+use xcore::lock::{Locked, ReadWriteLocked};
 
 use authorize::Authorizer;
 use observe::{EventSubscription as Published, PauseState, Unheard};
@@ -189,16 +190,11 @@ impl Hub {
     /// filter matches, and to every other node of the cluster listening
     /// for it; how many of this hub's subscriptions took it. Never waits
     /// for a subscriber or a node.
+    #[must_use]
     pub fn publish(&self, event: Event) -> usize {
         let event = Arc::new(event);
         let taken = self.deliver(&event);
-        let taps = Arc::clone(
-            &self
-                .inner
-                .taps
-                .read()
-                .unwrap_or_else(PoisonError::into_inner),
-        );
+        let taps = Arc::clone(&self.inner.taps.read_locked());
         for tap in taps.iter() {
             tap.offer(&event);
         }
@@ -243,13 +239,7 @@ impl Hub {
     }
 
     pub(crate) fn slots(&self) -> Slots {
-        Arc::clone(
-            &self
-                .inner
-                .slots
-                .read()
-                .unwrap_or_else(PoisonError::into_inner),
-        )
+        Arc::clone(&self.inner.slots.read_locked())
     }
 }
 
@@ -259,13 +249,13 @@ impl Inner {
     /// subscriptions is told. The subscriptions' new generation.
     fn change(&self, edit: impl FnOnce(&mut Vec<Arc<Slot>>)) -> u64 {
         {
-            let mut held = self.slots.write().unwrap_or_else(PoisonError::into_inner);
+            let mut held = self.slots.write_locked();
             let mut next: Vec<Arc<Slot>> = held.as_ref().clone();
             edit(&mut next);
             *held = Arc::new(next);
         }
         let generation = self.carriers.raise();
-        let mut watchers = self.watchers.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut watchers = self.watchers.locked();
         watchers.retain(|watcher| {
             watcher.upgrade().is_some_and(|signal| {
                 signal.raise();

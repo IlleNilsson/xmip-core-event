@@ -11,8 +11,7 @@
 //! every operator surface reads as *not hearing `<node>` since `<time>`:
 //! `<why>`* (`observe::Unheard`); and each change is recorded in the
 //! node's audit as `event.link`.
-
-use std::sync::PoisonError;
+use xcore::lock::Locked;
 
 use observe::Unheard;
 
@@ -22,25 +21,13 @@ impl Hub {
     /// The members of the cluster this hub does not hear now, by member.
     #[must_use]
     pub fn unheard(&self) -> Vec<Unheard> {
-        self.inner
-            .unheard
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .values()
-            .cloned()
-            .collect()
+        self.inner.unheard.locked().values().cloned().collect()
     }
 
     /// `node` is heard; whether it was unheard until now. Every
     /// subscription is told when it was.
     pub(crate) fn heard(&self, node: &str) -> bool {
-        let was = self
-            .inner
-            .unheard
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(node)
-            .is_some();
+        let was = self.inner.unheard.locked().remove(node).is_some();
         if was {
             self.tell();
         }
@@ -50,11 +37,7 @@ impl Hub {
     /// `node` is not heard by `by`, for `why`; whether it was heard until
     /// now. Every subscription is told when it was.
     pub(crate) fn not_heard(&self, by: &str, node: &str, why: &str) -> bool {
-        let mut unheard = self
-            .inner
-            .unheard
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut unheard = self.inner.unheard.locked();
         if let Some(held) = unheard.get_mut(node) {
             why.clone_into(&mut held.why);
             return false;

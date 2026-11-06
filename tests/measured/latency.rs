@@ -83,7 +83,7 @@ fn publish_apart(hub: &Hub, sent: &Mutex<Vec<Instant>>) -> Published {
         let event = Event::completed(Stage::Receive, Outcome::Success, node.as_str());
         sent.lock().expect("sent").push(Instant::now());
         let from = ProcessorTime::thread();
-        hub.publish(event);
+        let _ = hub.publish(event);
         published.publishing += from.elapsed();
         spin(Duration::from_micros(100));
         published.plain.push(control.round().0);

@@ -80,8 +80,8 @@ fn an_event_is_kept_until_the_wire_takes_it_and_arrives_in_order() {
     );
     let first = Event::completed(Stage::Send, Outcome::Failure, scope.as_str());
     let second = Event::completed(Stage::Send, Outcome::Success, scope);
-    hub.publish(first.clone());
-    hub.publish(second.clone());
+    let _ = hub.publish(first.clone());
+    let _ = hub.publish(second.clone());
 
     let twice = Retry::new(2, Duration::ZERO);
     let guards: [&dyn Guard; 1] = [&twice];
