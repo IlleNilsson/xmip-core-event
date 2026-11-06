@@ -28,7 +28,7 @@ use crate::audit_trail::noted;
 use crate::cluster::Member;
 use crate::cluster::link::{self, ALPN, BEAT, Frame, HANDSHAKE, SILENCE, WATCH, Watched};
 use crate::hub::Hub;
-use crate::signal::Signal;
+use xcore::wake::Revision;
 
 /// The most a connect waits.
 pub(crate) const CONNECT: Duration = Duration::from_secs(2);
@@ -56,7 +56,7 @@ pub(crate) type Following<'a> = (
 pub(crate) struct Upstream {
     hub: Hub,
     pub(crate) link: u64,
-    signal: Arc<Signal>,
+    signal: Arc<Revision>,
     stopping: Arc<AtomicBool>,
     connecting: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
@@ -71,7 +71,7 @@ struct Ask {
     member: Member,
     host: String,
     config: Arc<tls::ClientConfig>,
-    signal: Arc<Signal>,
+    signal: Arc<Revision>,
     stopping: Arc<AtomicBool>,
     /// In a connect, which nothing can cut short.
     connecting: Arc<AtomicBool>,
@@ -90,7 +90,7 @@ impl Upstream {
     /// Follow `member` from `hub`, presenting what `config` presents.
     pub(crate) fn start(following: Following<'_>, member: Member) -> Result<Self, String> {
         let (hub, by, config, audit) = following;
-        let signal = Arc::new(Signal::default());
+        let signal = Arc::new(Revision::default());
         hub.watch(&signal);
         let stopping = Arc::new(AtomicBool::new(false));
         let connecting = Arc::new(AtomicBool::new(false));

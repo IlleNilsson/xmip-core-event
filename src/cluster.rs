@@ -53,9 +53,9 @@ use xcore::Severity;
 use crate::EventError;
 use crate::audit_trail::noted;
 use crate::hub::Hub;
-use crate::signal::Signal;
 use serving::Serving;
 use upstream::Upstream;
+use xcore::wake::Revision;
 
 /// One member of the cluster, as a link reaches it.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -111,7 +111,7 @@ struct Follow {
     config: Arc<tls::ClientConfig>,
     every: Duration,
     audit: ProgramAudit,
-    signal: Signal,
+    signal: Revision,
     stopping: AtomicBool,
     upstreams: Mutex<BTreeMap<String, (Member, Upstream)>>,
 }
@@ -135,7 +135,7 @@ impl Cluster {
             config,
             every: joining.follow_every,
             audit: joining.audit,
-            signal: Signal::default(),
+            signal: Revision::default(),
             stopping: AtomicBool::new(false),
             upstreams: Mutex::new(BTreeMap::new()),
         });

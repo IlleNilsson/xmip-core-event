@@ -48,7 +48,6 @@ pub mod json_format;
 pub mod listener;
 pub mod outcome;
 mod queue;
-mod signal;
 pub mod subscriber;
 pub mod wire;
 

@@ -40,9 +40,9 @@ use crate::cluster::tap::Tap;
 use crate::filter::Filter;
 use crate::gate::Gate;
 use crate::queue::Queue;
-use crate::signal::Signal;
 use crate::subscriber::Subscriber;
 use crate::{Event, EventError};
+use xcore::wake::Revision;
 
 /// How many Events a queue holds when the subscriber names no bound.
 pub const DEFAULT_CAPACITY: usize = 1024;
@@ -68,7 +68,7 @@ pub(crate) struct Inner {
     /// Events through (`cluster.rs`).
     pub(crate) taps: RwLock<Taps>,
     /// Raised whenever the subscriptions change.
-    pub(crate) watchers: Mutex<Vec<Weak<Signal>>>,
+    pub(crate) watchers: Mutex<Vec<Weak<Revision>>>,
     /// The members of the cluster this hub does not hear now, by node.
     pub(crate) unheard: Mutex<BTreeMap<String, Unheard>>,
     /// The links carrying the subscriptions to the other nodes.
