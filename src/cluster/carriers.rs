@@ -14,8 +14,9 @@
 //! so a subscribe after it waits only the round trip.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use xcore::lock::Locked;
 
 use xcore::wake::{Revision, Wake};
 
@@ -129,7 +130,7 @@ impl Carriers {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.state.locked()
     }
 }
 
@@ -149,10 +150,6 @@ impl Hub {
     /// Raise `signal` whenever the subscriptions change, for as long as
     /// it is held elsewhere.
     pub(crate) fn watch(&self, signal: &Arc<Revision>) {
-        self.inner
-            .watchers
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(Arc::downgrade(signal));
+        self.inner.watchers.locked().push(Arc::downgrade(signal));
     }
 }

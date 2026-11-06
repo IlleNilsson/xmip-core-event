@@ -17,9 +17,10 @@
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use xcore::lock::Locked;
 
 use audit::program_audit::ProgramAudit;
 use xcore::Severity;
@@ -229,7 +230,7 @@ impl Ask {
                         heard: Instant::now(),
                     };
                     let reason = hear(&hub, link, &node, &audit, &mut watched);
-                    *broke.lock().unwrap_or_else(PoisonError::into_inner) = Some(reason);
+                    *broke.locked() = Some(reason);
                     signal.raise();
                 })
         };
@@ -244,7 +245,7 @@ impl Ask {
             if self.stopping.load(Ordering::SeqCst) {
                 break "this node stopped following it".to_string();
             }
-            if let Some(reason) = broke.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            if let Some(reason) = broke.locked().take() {
                 break reason;
             }
             let (generation, wants) = self.hub.wants();

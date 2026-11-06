@@ -14,9 +14,10 @@ use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use xcore::lock::Locked;
 
 use audit::program_audit::ProgramAudit;
 use xcore::Severity;
@@ -102,8 +103,7 @@ impl Serving {
             let address = self.address;
             let _ = net::accepting::woken(accepting, WAKE, || net::accepting::knock(address, WAKE));
         }
-        let served =
-            std::mem::take(&mut *self.served.lock().unwrap_or_else(PoisonError::into_inner));
+        let served = std::mem::take(&mut *self.served.locked());
         for thread in served {
             let _ = thread.join();
         }
@@ -133,7 +133,7 @@ fn accept(listener: &TcpListener, serve: &Arc<Serve>, served: &Served) {
         else {
             continue;
         };
-        let mut served = served.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut served = served.locked();
         served.retain(|thread| !thread.is_finished());
         served.push(thread);
     }
@@ -185,7 +185,7 @@ fn answer(connection: TcpStream, peer: SocketAddr, serve: &Arc<Serve>) {
             .spawn(move || {
                 let reason = carry(&tap, &out);
                 ending.store(true, Ordering::SeqCst);
-                out.lock().unwrap_or_else(PoisonError::into_inner).close();
+                out.locked().close();
                 reason
             })
     };
@@ -268,7 +268,7 @@ fn write<W: Write>(out: &Mutex<W>, frames: &[Frame]) -> Result<(), String> {
             .append(&mut bytes)
             .map_err(|error| error.to_string())?;
     }
-    let mut out = out.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut out = out.locked();
     out.write_all(&bytes)
         .and_then(|()| out.flush())
         .map_err(|error| error.to_string())

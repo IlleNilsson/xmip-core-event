@@ -204,7 +204,7 @@ impl TestNode {
             outcome,
             format!("{}/receive/orders", node(&self.name)),
         );
-        self.hub.publish(event.clone());
+        let _ = self.hub.publish(event.clone());
         event
     }
 

@@ -53,7 +53,7 @@ fn a_publish_to_a_hundred_subscriptions_takes_microseconds() {
 
     let started = Instant::now();
     for event in events {
-        hub.publish(event);
+        let _ = hub.publish(event);
     }
     let each = started.elapsed() / 1000;
 
@@ -67,7 +67,7 @@ fn a_publish_to_a_hundred_subscriptions_takes_microseconds() {
     let events: Vec<Event> = (0..1000).map(|_| received(Outcome::Success)).collect();
     let started = Instant::now();
     for event in events {
-        hub.publish(event);
+        let _ = hub.publish(event);
     }
     let each = started.elapsed() / 1000;
     println!("one publish to 1 matching subscription: {each:?}");

@@ -7,8 +7,9 @@
 //! go of. Closed, it takes nothing more and wakes whoever waits.
 
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
+use xcore::lock::Locked;
 
 use xcore::wake::Wake;
 
@@ -135,6 +136,6 @@ impl Queue {
 
     /// What the queue holds and has done, read under its lock.
     pub(crate) fn state(&self) -> MutexGuard<'_, State> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        self.state.locked()
     }
 }

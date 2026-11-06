@@ -122,7 +122,7 @@ fn resuming_hands_over_what_queued_and_wakes_a_waiting_drain() {
     let id = subscription.id();
     hub.act(id, Act::Pause, "ilian").expect("paused");
     let first = received();
-    hub.publish(first.clone());
+    let _ = hub.publish(first.clone());
 
     let (tell, told) = mpsc::channel();
     let waiting = std::thread::spawn(move || {

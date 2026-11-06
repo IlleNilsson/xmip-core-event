@@ -8,7 +8,8 @@
 //! capability ([`Hub::authorize_by`]). Who may subscribe is a policy and
 //! nothing beside it; nothing configured is a refusal, as at every gate.
 
-use std::sync::{Arc, PoisonError, RwLock};
+use std::sync::{Arc, RwLock};
+use xcore::lock::ReadWriteLocked;
 
 use authorize::Authorizer;
 
@@ -24,7 +25,7 @@ impl Gate {
 
     /// The policies now.
     pub(crate) fn policies(&self) -> Arc<Vec<Arc<dyn Authorizer>>> {
-        Arc::clone(&self.0.read().unwrap_or_else(PoisonError::into_inner))
+        Arc::clone(&self.0.read_locked())
     }
 }
 
@@ -33,12 +34,7 @@ impl Hub {
     /// the hub was handed before: what a node starting hands the process's
     /// hub, and what a program hosting a hub of its own hands it.
     pub fn authorize_by(&self, policies: Vec<Arc<dyn Authorizer>>) {
-        *self
-            .inner
-            .gate
-            .0
-            .write()
-            .unwrap_or_else(PoisonError::into_inner) = Arc::new(policies);
+        *self.inner.gate.0.write_locked() = Arc::new(policies);
     }
 }
 

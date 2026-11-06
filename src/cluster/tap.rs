@@ -10,7 +10,8 @@
 //! it matched, and the count crosses instead (`link.rs`, *Missed*).
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, PoisonError, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
+use xcore::lock::{Locked, ReadWriteLocked};
 
 use crate::Event;
 use crate::filter::Filter;
@@ -33,20 +34,20 @@ pub(crate) struct Tap {
 impl Tap {
     /// Replace what the asking node wants.
     pub(crate) fn want(&self, wants: Vec<(u64, Filter)>) {
-        *self.wants.write().unwrap_or_else(PoisonError::into_inner) = Arc::new(wants);
+        *self.wants.write_locked() = Arc::new(wants);
     }
 
     /// Queue `event` where any filter wants it; a full queue counts it for
     /// each subscription it matched.
     pub(crate) fn offer(&self, event: &Arc<Event>) {
-        let wants = Arc::clone(&self.wants.read().unwrap_or_else(PoisonError::into_inner));
+        let wants = Arc::clone(&self.wants.read_locked());
         if !wants.iter().any(|(_, filter)| filter.matches(event)) {
             return;
         }
         if self.queue.offer(event) || self.queue.is_closed() {
             return;
         }
-        let mut missed = self.missed.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut missed = self.missed.locked();
         for (id, filter) in wants.iter() {
             if filter.matches(event) {
                 *missed.entry(*id).or_default() += 1;
@@ -56,7 +57,7 @@ impl Tap {
 
     /// What was refused since the last time asked, by subscription.
     pub(crate) fn take_missed(&self) -> Vec<(u64, u64)> {
-        std::mem::take(&mut *self.missed.lock().unwrap_or_else(PoisonError::into_inner))
+        std::mem::take(&mut *self.missed.locked())
             .into_iter()
             .collect()
     }
@@ -81,11 +82,7 @@ impl Hub {
     }
 
     fn change_taps(&self, edit: impl FnOnce(&mut Vec<Arc<Tap>>)) {
-        let mut held = self
-            .inner
-            .taps
-            .write()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut held = self.inner.taps.write_locked();
         let mut next = held.as_ref().clone();
         edit(&mut next);
         *held = Arc::new(next);
