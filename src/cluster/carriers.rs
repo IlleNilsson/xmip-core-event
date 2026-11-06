@@ -17,11 +17,10 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use xcore::wake::Wake;
+use xcore::wake::{Revision, Wake};
 
 use crate::filter::Filter;
 use crate::hub::Hub;
-use crate::signal::Signal;
 
 /// The most a subscribe waits for a connected link to carry it: a node
 /// answering slower than this is slower than any healthy round trip, and
@@ -149,7 +148,7 @@ impl Hub {
 
     /// Raise `signal` whenever the subscriptions change, for as long as
     /// it is held elsewhere.
-    pub(crate) fn watch(&self, signal: &Arc<Signal>) {
+    pub(crate) fn watch(&self, signal: &Arc<Revision>) {
         self.inner
             .watchers
             .lock()
