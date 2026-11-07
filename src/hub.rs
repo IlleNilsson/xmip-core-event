@@ -27,7 +27,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
+use std::sync::{Arc, LazyLock, Mutex, RwLock, Weak};
 use std::time::Duration;
 use xcore::lock::{Locked, ReadWriteLocked};
 
@@ -122,9 +122,10 @@ impl Hub {
     /// boundary subscribes through. It admits nobody until it is handed the
     /// policies that allow (`authorize_by`): the node's as it starts, or the
     /// hosting program's.
+    #[must_use]
     pub fn process() -> &'static Self {
-        static PROCESS: OnceLock<Hub> = OnceLock::new();
-        PROCESS.get_or_init(|| Self::new(Vec::new()))
+        static PROCESS: LazyLock<Hub> = LazyLock::new(|| Hub::new(Vec::new()));
+        &PROCESS
     }
 
     /// Subscribe `subscriber` to what `filter` asks for, through a queue of
