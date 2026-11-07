@@ -25,9 +25,9 @@ use xmip_core_event::{Event, EventError};
 
 /// The test cluster, read once: a node's scope is asked for on every raise.
 fn test_cluster() -> &'static configure::fixture::TestCluster {
-    static CLUSTER: std::sync::OnceLock<configure::fixture::TestCluster> =
-        std::sync::OnceLock::new();
-    CLUSTER.get_or_init(configure::fixture::test_cluster)
+    static CLUSTER: std::sync::LazyLock<configure::fixture::TestCluster> =
+        std::sync::LazyLock::new(configure::fixture::test_cluster);
+    &CLUSTER
 }
 
 /// The scope of the cluster every test node is in.
