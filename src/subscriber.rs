@@ -85,8 +85,11 @@ impl Subscriber {
     /// allowed at the scope it reaches.
     #[must_use]
     pub fn authorized(&self, filter: &Filter, policies: &[&dyn Authorizer]) -> Decision {
-        let asked =
-            Attempt::new(Action::Send, filter.reach()).at(SystemClock.unix_timestamp_nanos());
+        let asked = Attempt::new(
+            Action::Send,
+            filter.reach(),
+            SystemClock.unix_timestamp_nanos(),
+        );
         let attempts: Vec<Attempt> = if filter.types.is_empty() {
             vec![asked]
         } else {
