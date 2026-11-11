@@ -21,7 +21,7 @@ use xmip_core_event::Event;
 use xmip_core_event::filter::Filter;
 use xmip_core_event::hub::Hub;
 use xmip_core_event::outcome::Outcome;
-use xmip_core_event::subscriber::Subscriber;
+use xmip_core_event::subscriber::{Subscriber, fixture};
 
 /// The node the hub stands on: the test cluster's first.
 fn node() -> String {
@@ -35,8 +35,8 @@ fn directory(name: &str) -> PathBuf {
 }
 
 fn subscriber(at: &Path) -> Subscriber {
-    Subscriber::in_process(
-        PartyId::new(42),
+    fixture::subscriber(
+        &fixture::party(PartyId::new(42)),
         ProgramAudit::new("xmip-core-event tests", Some(at)),
     )
 }
@@ -63,7 +63,7 @@ fn a_paused_subscription_keeps_queuing_hands_nothing_over_and_counts_what_it_mis
     let at = directory("pause");
     let hub = hub();
     let operations = Party::new(PartyId::new(42), PartyKind::Service, "operations");
-    let declared = Subscriber::declared(
+    let declared = fixture::subscriber(
         &operations,
         ProgramAudit::new("xmip-core-event tests", Some(&at)),
     );

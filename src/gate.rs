@@ -1,12 +1,14 @@
 //! Who may subscribe to a hub: the authorization gate it asks, once, at
 //! every subscribe (ADR-0065 clause 4, and its amendment of 2026-09-26: no
-//! subscriber is admitted for its place, and every one names its Party and
-//! is authorized as one).
+//! subscriber is admitted for its place). A subscriber is the Party its
+//! proven caller resolves to, never one it names, and is authorized as that
+//! Party (ADR-0019, amendment 2026-11-11).
 //!
-//! The gate is one thing: the policies the hub is handed — a node's, as it
-//! starts, or those the program hosting the hub builds from the authorize
-//! capability ([`Hub::authorize_by`]). Who may subscribe is a policy and
-//! nothing beside it; nothing configured is a refusal, as at every gate.
+//! The gate is one thing: the policies the hub is handed — those the
+//! program hosting the hub builds from the authorize capability
+//! ([`Hub::authorize_by`]); no node hands its own as it starts yet (open
+//! problem 67). Who may subscribe is a policy and nothing beside it;
+//! nothing configured is a refusal, as at every gate.
 
 use std::sync::{Arc, RwLock};
 use xcore::lock::ReadWriteLocked;
@@ -46,12 +48,12 @@ mod tests {
 
     use super::*;
     use crate::filter::Filter;
-    use crate::subscriber::Subscriber;
+    use crate::subscriber::{Subscriber, fixture};
 
     fn subscriber(party: u128) -> Subscriber {
         let at = std::env::temp_dir().join("xmip-core-event-gate-tests");
-        Subscriber::in_process(
-            PartyId::new(party),
+        fixture::subscriber(
+            &fixture::party(PartyId::new(party)),
             ProgramAudit::new("xmip-core-event tests", Some(&at)),
         )
     }

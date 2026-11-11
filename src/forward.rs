@@ -77,7 +77,7 @@ impl<W: Wire> Forwarder<W> {
     pub fn pump(&mut self, timeout: Duration, guards: &[&dyn Guard]) -> Pumped {
         self.pending
             .extend(self.subscription.next(timeout, usize::MAX).events);
-        let party = self.subscription.subscriber().party;
+        let party = self.subscription.subscriber().party();
         let mut carried = Vec::new();
         let mut gave_up = None;
 
@@ -127,7 +127,7 @@ impl<W: Wire> Forwarder<W> {
     /// audit.
     fn audit(&self, carried: &[String], gave_up: Option<&str>) {
         let subscriber = self.subscription.subscriber();
-        let party = subscriber.party.to_string();
+        let party = subscriber.party().to_string();
         if !carried.is_empty() {
             let properties = BTreeMap::from([
                 ("party".to_string(), party.clone()),

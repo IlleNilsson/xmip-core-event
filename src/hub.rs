@@ -120,8 +120,8 @@ impl Hub {
 
     /// This process's hub: the one the runtime publishes to and the C
     /// boundary subscribes through. It admits nobody until it is handed the
-    /// policies that allow (`authorize_by`): the node's as it starts, or the
-    /// hosting program's.
+    /// policies that allow (`authorize_by`): the hosting program's, since no
+    /// node hands its own as it starts yet (open problem 67).
     #[must_use]
     pub fn process() -> &'static Self {
         static PROCESS: LazyLock<Hub> = LazyLock::new(|| Hub::new(Vec::new()));
@@ -274,8 +274,8 @@ impl Slot {
         Published {
             node: node.to_string(),
             id: self.id,
-            subscriber: self.subscriber.name.clone(),
-            party: self.subscriber.party.to_string(),
+            subscriber: self.subscriber.name().to_string(),
+            party: self.subscriber.party().to_string(),
             action: self.filter.said(),
             scope: self.filter.reach().to_string(),
             state: if queue.paused {

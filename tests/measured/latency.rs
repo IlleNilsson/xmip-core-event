@@ -34,7 +34,7 @@ use xmip_core_event::Event;
 use xmip_core_event::filter::Filter;
 use xmip_core_event::hub::Hub;
 use xmip_core_event::outcome::Outcome;
-use xmip_core_event::subscriber::Subscriber;
+use xmip_core_event::subscriber::{Subscriber, fixture};
 
 /// How many Events each measurement publishes.
 const ROUNDS: usize = 500;
@@ -49,8 +49,8 @@ fn directory(name: &str) -> PathBuf {
 }
 
 fn subscriber(at: &Path) -> Subscriber {
-    Subscriber::in_process(
-        PartyId::new(5),
+    fixture::subscriber(
+        &fixture::party(PartyId::new(5)),
         ProgramAudit::new("xmip-core-event tests", Some(at)),
     )
 }

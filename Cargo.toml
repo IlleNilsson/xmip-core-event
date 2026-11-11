@@ -38,6 +38,15 @@ tls = { package = "xmip-core-library-tls", git = "https://github.com/IlleNilsson
 # The wire event's JSON format, read and written as the estate reads JSON.
 serde_json = "1"
 
+[features]
+# `subscriber::fixture`: a subscriber built as a proven caller for a test,
+# test support as `configure::fixture` is, which only a dev-dependency turns
+# on — this crate's own tests and the transports' event-wire tests. It keeps
+# a test's helper out of a node's build and guards nothing: any code linked
+# into a process can build a proven identity, and the gate that proves a
+# subscriber is the runtime's (ADR-0019, amendment 2026-11-11).
+test-support = []
+
 # The module's timing program (doc/governance/rust-style.md section 5c): a
 # plain cargo test leaves it out, and the landing runs it after every other
 # test here, alone, one test at a time, so what it measures is Xmip's work.
@@ -47,6 +56,10 @@ path = "tests/measured/main.rs"
 test = false
 
 [dev-dependencies]
+# The crate's own integration tests subscribe through `subscriber::fixture`:
+# a dev-dependency on itself is how Cargo turns a feature on for the tests
+# and for nothing else.
+xmip-core-event = { path = ".", features = ["test-support"] }
 # The latency tests' figures and Xmip's own processor time
 # (`xcore::latency`, `xcore::processor_time`). Test-only.
 xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main", features = ["uuid-v7", "test-support"] }

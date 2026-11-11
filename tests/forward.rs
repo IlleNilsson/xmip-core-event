@@ -20,7 +20,7 @@ use xmip_core_event::filter::Filter;
 use xmip_core_event::forward::{Forwarder, Wire};
 use xmip_core_event::hub::Hub;
 use xmip_core_event::outcome::Outcome;
-use xmip_core_event::subscriber::Subscriber;
+use xmip_core_event::subscriber::fixture;
 
 /// A far end that refuses the first `refusing` attempts, then keeps what
 /// it is given and the Party it was carried to.
@@ -59,8 +59,10 @@ fn an_event_is_kept_until_the_wire_takes_it_and_arrives_in_order() {
     let at = directory();
     let party = PartyId::new(9);
     let hub = Hub::new(vec![Arc::new(PartyPolicy::new().allow(party))]);
-    let subscriber =
-        Subscriber::in_process(party, ProgramAudit::new("xmip-core-event tests", Some(&at)));
+    let subscriber = fixture::subscriber(
+        &fixture::party(party),
+        ProgramAudit::new("xmip-core-event tests", Some(&at)),
+    );
     let subscription = hub
         .subscribe(subscriber, Filter::everything(), 0)
         .expect("allowed");
