@@ -15,7 +15,7 @@ use xmip_core_event::Event;
 use xmip_core_event::filter::Filter;
 use xmip_core_event::hub::Hub;
 use xmip_core_event::outcome::Outcome;
-use xmip_core_event::subscriber::Subscriber;
+use xmip_core_event::subscriber::{Subscriber, fixture};
 
 fn directory(name: &str) -> PathBuf {
     let at = std::env::temp_dir().join(format!("xmip-event-act-{name}-{}", std::process::id()));
@@ -24,8 +24,8 @@ fn directory(name: &str) -> PathBuf {
 }
 
 fn subscriber(at: &Path) -> Subscriber {
-    Subscriber::in_process(
-        PartyId::new(42),
+    fixture::subscriber(
+        &fixture::party(PartyId::new(42)),
         ProgramAudit::new("xmip-core-event tests", Some(at)),
     )
 }

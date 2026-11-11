@@ -17,6 +17,7 @@ use xcore::lock::Locked;
 
 use audit::keeper::later;
 use audit::program_audit::ProgramAudit;
+use context::AuthenticatedIdentity;
 use xcore::{EventId, ExecutionPhase, PartyId, Severity};
 
 use crate::filter::Filter;
@@ -55,7 +56,7 @@ impl Deliveries {
 
         let deliveries = Arc::clone(self);
         let audit = subscriber.audit.clone();
-        let party = subscriber.party;
+        let party = subscriber.party();
         later(move || deliveries.keep(&audit, party));
     }
 
@@ -96,16 +97,40 @@ impl Deliveries {
     }
 }
 
-/// The subscriber and its filter, as audit properties.
+/// The subscriber and its filter, as audit properties: its Party, the
+/// identity its gate answered ([`presented`]) and what it asks for
+/// ([`asked`]).
 pub(crate) fn described(subscriber: &Subscriber, filter: &Filter) -> BTreeMap<String, String> {
+    let mut about = asked(filter);
+    about.extend(presented(&subscriber.identity.transport));
+    about.extend([
+        ("party".to_string(), subscriber.party().to_string()),
+        ("name".to_string(), subscriber.name().to_string()),
+        ("identity".to_string(), subscriber.identity.to_string()),
+    ]);
+    about
+}
+
+/// What a subscribe asks for, as audit properties: the scope it reaches, in
+/// words (`Filter::said`), and its types and outcomes.
+pub(crate) fn asked(filter: &Filter) -> BTreeMap<String, String> {
     let outcomes: Vec<&str> = filter.outcomes.iter().map(|o| o.word()).collect();
     BTreeMap::from([
-        ("party".to_string(), subscriber.party.to_string()),
-        ("name".to_string(), subscriber.name.clone()),
-        ("identity".to_string(), subscriber.identity.to_string()),
         ("scope".to_string(), filter.reach().to_string()),
+        ("action".to_string(), filter.said()),
         ("types".to_string(), filter.types.join(" ")),
         ("outcomes".to_string(), outcomes.join(" ")),
+    ])
+}
+
+/// Who asked, as the gate answered it, as audit properties: the claim, its
+/// mechanism and how it was established (ADR-0013 clause 1).
+pub(crate) fn presented(caller: &AuthenticatedIdentity) -> BTreeMap<String, String> {
+    BTreeMap::from([
+        ("mechanism".to_string(), caller.mechanism.name().to_string()),
+        ("value".to_string(), caller.value.clone()),
+        ("established".to_string(), caller.established.to_string()),
+        ("verified".to_string(), caller.verified.word().to_string()),
     ])
 }
 
@@ -137,7 +162,7 @@ pub(crate) fn noted(
 }
 
 /// Keep one record now.
-fn kept(
+pub(crate) fn kept(
     audit: &ProgramAudit,
     action: &str,
     severity: Severity,

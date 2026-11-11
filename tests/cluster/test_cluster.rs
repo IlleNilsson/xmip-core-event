@@ -20,7 +20,7 @@ use xmip_core_event::cluster::{Cluster, Joining, Member, Membership};
 use xmip_core_event::filter::Filter;
 use xmip_core_event::hub::{EventSubscription, Hub};
 use xmip_core_event::outcome::Outcome;
-use xmip_core_event::subscriber::Subscriber;
+use xmip_core_event::subscriber::fixture;
 use xmip_core_event::{Event, EventError};
 
 /// The test cluster, read once: a node's scope is asked for on every raise.
@@ -193,7 +193,8 @@ impl TestNode {
         *allowed = allowed.clone().allow(PartyId::new(party));
         self.hub.authorize_by(vec![Arc::new(allowed.clone())]);
         drop(allowed);
-        let subscriber = Subscriber::in_process(PartyId::new(party), self.audit.clone());
+        let subscriber =
+            fixture::subscriber(&fixture::party(PartyId::new(party)), self.audit.clone());
         self.hub.subscribe(subscriber, filter, 0).expect("allowed")
     }
 

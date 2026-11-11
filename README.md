@@ -20,14 +20,23 @@ be told. Delivery is not in the message path and no Message waits for it.
 - **Who may see it.** A subscriber is a Party (`subscriber::Subscriber`),
   and the authorization gate decides, once, when it subscribes:
   `authorize::authorize` for a Send at the scope it reaches, each Event type
-  as the Contract. Nothing configured is a refusal. A program in this
-  process is `peer-credentials` naming the process, resolved to the Party it
-  names, and being here admits it to nothing (ADR-0065, amendment
-  2026-09-26): the hub's gate (`gate`) is the one policy list it is handed
-  by `Hub::authorize_by` — the node's as it starts, or one the program
-  hosting the hub takes from the authorize capability (for "these Parties",
-  `xmip-core-authorize-party`'s `PartyPolicy`, which this crate's tests use). `Hub::process`
-  admits nobody until it is handed one.
+  as the Contract. Nothing configured is a refusal. A subscriber is the
+  caller a gate proved, never a Party it names: `Subscriber::proven` takes
+  the identity the authentication gate answered and the declared Party it
+  resolved to, and refuses one not proven or resolved to no Party or another
+  (ADR-0019, amendment 2026-11-11). A program in a node's own process is the
+  account the operating system names, proven by the runtime's gate and
+  resolved through that node's Parties. Its Party is then authorized by the
+  hub's gate (`gate`), the one policy list the hub is handed by
+  `Hub::authorize_by`, which the program hosting the hub takes from the
+  authorize capability (for "these Parties", `xmip-core-authorize-party`'s
+  `PartyPolicy`, which this crate's tests use); `Hub::process` admits nobody
+  until it is handed one (ADR-0065, amendment 2026-09-26). No node hands the
+  process's hub its configured policy as it starts yet, so in a program's
+  process it is that program's policy that decides (open problem 67). A
+  subscribe refused before it has a subscriber — the caller proved to be no
+  Party — is audited by `subscriber::refused` under the names the hub
+  records its own refusals with.
 - **In process.** `hub::Hub` fans an Event out to every matching
   subscription through a bounded queue each and never waits for a
   subscriber: a full queue refuses the Event for that subscriber and counts
@@ -99,6 +108,16 @@ be told. Delivery is not in the message path and no Message waits for it.
   capability's keeper (`audit::keeper`) so no Event waits for a disk and
   unsubscribing never does either; the program's next direct record — its
   stop — is kept after them.
+- **Tests build theirs through `subscriber::fixture`**, behind the
+  `test-support` feature as `configure::fixture` is: a subscriber whose
+  caller is built proven, as a gate would answer. Only a dev-dependency
+  turns it on — this crate's own tests, through a dev-dependency on itself,
+  and the AMQP, HTTP and Kafka transports' event-wire tests — which keeps a
+  test's helper out of a node's build. It guards nothing:
+  `Subscriber::proven` and a proven `context::AuthenticatedIdentity` are
+  public, so any code linked into a process can build one, and what proves
+  a program's subscriber is the runtime's gate (ADR-0019, amendment
+  2026-11-11).
 
 ## Near real time
 
