@@ -7,10 +7,11 @@
 //! optional ones and any extension — and the data, as JSON, text or bytes.
 //! [`WireEvent::checked`] refuses what the specification refuses: another
 //! `specversion`, a missing or empty required attribute, an extension name
-//! outside `a-z0-9`. The JSON event format is `json_format.rs`'s; how a
-//! protocol carries one is `binding.rs`'s; what an Xmip Event becomes is
-//! [`WireEvent::from_event`]'s; what a transport implements to carry one
-//! to a Party is [`Wire`].
+//! outside `a-z0-9`. The JSON event format is `json_format.rs`'s; the two
+//! modes a protocol carries one in are `binding.rs`'s, over the rules of
+//! the protocol's binding, which are its transport's; what an Xmip Event
+//! becomes is [`WireEvent::from_event`]'s; what a transport implements to
+//! carry one to a Party is [`Wire`].
 
 use std::collections::BTreeMap;
 
@@ -18,7 +19,7 @@ use codec::civil::{read_rfc3339, rfc3339_nanos};
 use serde_json::{Map, Value};
 use xcore::{Failure, PartyId};
 
-use crate::binding::Carried;
+use crate::binding::{Carried, Rules};
 use crate::{Event, EventError};
 
 /// The one version this reads and writes.
@@ -288,11 +289,15 @@ impl WireEvent {
     }
 }
 
-/// A transport that carries a `WireEvent` to a Party, as the binding wrote
-/// it: Xmip's own HTTP, Kafka and AMQP transports each implement it, and
-/// `xmip-core-cluster`'s forwarder carries a subscription through one, at
-/// least once (ADR-0065 clause 3).
+/// A transport that carries a `WireEvent` to a Party, as its protocol's
+/// binding wrote it: Xmip's own HTTP, Kafka and AMQP transports each
+/// implement it, and `xmip-core-cluster`'s forwarder carries a
+/// subscription through one, at least once (ADR-0065 clause 3).
 pub trait Wire: Send {
+    /// The rules of this wire's protocol binding: what
+    /// [`Rules::write`] puts on it and [`Rules::read`] takes off it.
+    fn rules(&self) -> &dyn Rules;
+
     /// Carry `carried` to `party`, presenting the identity configured for
     /// it; `Ok` only once the far end acknowledged it.
     ///

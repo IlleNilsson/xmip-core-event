@@ -11,10 +11,10 @@
 //! [`filter::Filter::matches`] is the one rule that decides what it gets.
 //!
 //! Over the wire an Event is a [`wire::WireEvent`] (its JSON format in
-//! [`json_format`]), carried in either mode of the HTTP, Kafka or AMQP
-//! binding ([`binding::Binding`]) by Xmip's own transport of that name,
-//! each a [`wire::Wire`]. Its data is bytes unless its `datacontenttype`
-//! declares JSON (ADR-0038).
+//! [`json_format`]), carried in either mode ([`binding::Mode`]) by a
+//! [`wire::Wire`]: Xmip's own HTTP, Kafka and AMQP transports each are
+//! one, and each holds its protocol binding's [`binding::Rules`]. Its data
+//! is bytes unless its `datacontenttype` declares JSON (ADR-0038).
 //!
 //! This crate says what an Event is and runs nothing. Delivering one — the
 //! hub every subscriber is admitted to, the subscriber and its gate, an

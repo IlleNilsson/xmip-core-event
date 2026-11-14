@@ -20,9 +20,15 @@ be told. Delivery is not in the message path and no Message waits for it.
   `Filter::reach` is the scope the authorization gate is asked about, and
   `Filter::said` what a surface lists a subscription by.
 - **Over the wire.** `wire::WireEvent` is an Event as it travels,
-  `json_format` its JSON format; `binding::Binding` writes and reads it in
-  either mode of the HTTP, Kafka and AMQP protocol bindings (1.0.2). The
-  standard it follows is named once, in `src/wire.rs`.
+  `json_format` its JSON format; `binding::Rules::write` and
+  `binding::Rules::read` write and read it in either mode
+  (`binding::Mode`), once, over a protocol binding's rules — its prefix,
+  how a header's name is matched and how a value is escaped. Those rules
+  are not this crate's: each is the transport's of that name, in its
+  `src/event_wire.rs` (`HttpEventRules`, `KafkaEventRules`,
+  `AmqpEventRules`; ADR-0065, amendment 2026-11-14), and a `wire::Wire`
+  answers its own (`Wire::rules`). The standard it follows is named once,
+  in `src/wire.rs`.
   The data is bytes (ADR-0038, 2026-09-26): in binary mode the body is read
   and written byte for byte whatever its content type; in the JSON format,
   data whose `datacontenttype` declares JSON (`application/json`, any

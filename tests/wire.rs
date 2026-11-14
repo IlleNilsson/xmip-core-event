@@ -1,20 +1,67 @@
-//! The wire event against its specification's own examples: the JSON
-//! event format's three, the HTTP, Kafka and AMQP bindings' binary-mode
-//! examples, the HTTP binding's percent-encoding example, and an Xmip Event
-//! round-tripped through every binding in both modes.
+//! The wire event against its specification's own examples, the JSON event
+//! format's three, and the two modes over a binding's rules: binary data
+//! byte for byte, a binding's prefix, matching and escaping used both
+//! ways, what is not one event refused, and an Xmip Event round-tripped in
+//! both modes. Each protocol binding's own examples are its transport's
+//! (`tests/event_wire.rs` in the http, kafka and amqp transports).
+
+use std::borrow::Cow;
 
 use node::Stage;
 use serde_json::{Value, json};
 use xcore::{JourneyId, MessageId, PartyId};
-use xmip_core_event::Event;
-use xmip_core_event::binding::{Binding, Carried, Mode, STRUCTURED};
+use xmip_core_event::binding::{Carried, Mode, Rules, STRUCTURED};
 use xmip_core_event::json_format::JSON_FORMAT;
 use xmip_core_event::outcome::Outcome;
 use xmip_core_event::wire::{Data, Extension, WireEvent};
+use xmip_core_event::{Event, EventError};
 
 fn read(value: &Value) -> WireEvent {
     WireEvent::read_json(value).expect("a WireEvent")
 }
+
+/// A binding with the default rules: its prefix, matched exactly, and
+/// every value as it is.
+struct Plain;
+
+impl Rules for Plain {
+    fn prefix(&self) -> &'static str {
+        "ev-"
+    }
+}
+
+/// A binding that matches a name without regard to case and writes a
+/// space as `~`, refusing a value that holds a space of its own.
+struct Folding;
+
+impl Rules for Folding {
+    fn prefix(&self) -> &'static str {
+        "ev-"
+    }
+
+    fn attribute<'h>(&self, header: &'h str) -> Option<&'h str> {
+        let (head, name) = header.split_at_checked(self.prefix().len())?;
+        head.eq_ignore_ascii_case(self.prefix()).then_some(name)
+    }
+
+    fn escaped<'v>(&self, value: &'v str) -> Cow<'v, str> {
+        if value.contains(' ') {
+            Cow::Owned(value.replace(' ', "~"))
+        } else {
+            Cow::Borrowed(value)
+        }
+    }
+
+    fn unescaped<'v>(&self, value: &'v str) -> Result<Cow<'v, str>, EventError> {
+        if value.contains(' ') {
+            return Err(EventError::new("a space this binding never writes"));
+        }
+        Ok(Cow::Owned(value.replace('~', " ")))
+    }
+}
+
+/// Both test bindings, as a wire answers its own.
+const BINDINGS: [&dyn Rules; 2] = [&Plain, &Folding];
 
 /// JSON format section 5.1, the example with binary data.
 #[test]
@@ -152,28 +199,64 @@ fn data_under_a_type_that_is_not_json_must_be_a_string() {
 /// Binary mode: the body is the data, byte for byte, whatever its content
 /// type says — nothing is decoded on the way in or out.
 #[test]
-fn binary_mode_data_round_trips_byte_exact_on_every_binding() {
+fn binary_mode_data_round_trips_byte_exact_whatever_the_rules() {
     let bodies: [(&str, &[u8]); 3] = [
         ("text/plain; charset=utf-8", &[b'a', 0xc3, 0x28, b'z']),
         ("application/json", b"{ \"a\" : 1 ,}"),
         ("application/octet-stream", &[0, 0xff, 0xfe, 0x80]),
     ];
-    for binding in [Binding::Http, Binding::Kafka, Binding::Amqp] {
+    for (rules, binding) in BINDINGS.iter().enumerate() {
         for (media, body) in bodies {
             let mut event = WireEvent::new("1", "/s", "t");
             event.data_content_type = Some(media.to_string());
             event.data = Some(Data::Binary(body.to_vec()));
             let carried = binding.write(&event, Mode::Binary).expect("written");
-            assert_eq!(carried.body, body, "{binding:?} {media}");
+            assert_eq!(carried.body, body, "rules {rules}, {media}");
             let back = binding.read(&carried).expect("read");
             assert_eq!(
                 back.data,
                 Some(Data::Binary(body.to_vec())),
-                "{binding:?} {media}"
+                "rules {rules}, {media}"
             );
             assert_eq!(back, event);
         }
     }
+}
+
+/// Binary mode by a binding's rules: each attribute under its prefix,
+/// escaped as the binding writes it, read back by the binding's matching
+/// and unescaped, and a value its escaping refuses refused.
+#[test]
+fn binary_mode_writes_and_reads_by_the_bindings_rules() {
+    let mut event = WireEvent::new("1", "/s", "t");
+    event.subject = Some("a b".to_string());
+
+    let mut carried = Folding.write(&event, Mode::Binary).expect("written");
+    let subject = carried
+        .headers
+        .iter()
+        .find(|(name, _)| name == "ev-subject")
+        .map(|(_, value)| value.as_str());
+    assert_eq!(subject, Some("a~b"), "escaped as the binding writes it");
+    assert!(
+        carried
+            .headers
+            .iter()
+            .all(|(name, _)| name.starts_with("ev-"))
+    );
+    for (name, _) in &mut carried.headers {
+        *name = name.to_ascii_uppercase();
+    }
+    assert_eq!(Folding.read(&carried).expect("read"), event, "EV-, folded");
+    assert!(
+        Plain.read(&carried).is_err(),
+        "EV- is not ev- matched exactly"
+    );
+
+    let written = Plain.write(&event, Mode::Binary).expect("written");
+    let refused = Folding.read(&written).expect_err("a space unescaped");
+    assert!(refused.to_string().contains("never writes"), "{refused}");
+    assert_eq!(Plain.read(&written).expect("read"), event, "as it is");
 }
 
 #[test]
@@ -200,131 +283,24 @@ fn what_the_specification_refuses_is_refused() {
     assert!(WireEvent::read_json(&json!([base])).is_err());
 }
 
-/// HTTP binding section 3.1.4, the binary-mode example.
 #[test]
-fn the_http_binary_example_reads_with_headers_in_any_case() {
-    let carried = Carried {
-        content_type: Some("application/json; charset=utf-8".to_string()),
-        headers: [
-            ("ce-specversion", "1.0"),
-            ("ce-type", "com.example.someevent"),
-            ("CE-Time", "2018-04-05T03:56:24Z"),
-            ("ce-id", "1234-1234-1234"),
-            ("ce-source", "/mycontext/subcontext"),
-            ("Host", "webhook.example.com"),
-        ]
-        .map(|(name, value)| (name.to_string(), value.to_string()))
-        .to_vec(),
-        body: br#"{"appinfoA":"abc"}"#.to_vec(),
-    };
-
-    let event = Binding::Http.read(&carried).expect("a WireEvent");
-
-    assert_eq!(event.source, "/mycontext/subcontext");
-    assert_eq!(event.time.as_deref(), Some("2018-04-05T03:56:24Z"));
-    assert_eq!(
-        event.data_content_type.as_deref(),
-        Some("application/json; charset=utf-8")
-    );
-    assert_eq!(
-        event.data,
-        Some(Data::Binary(br#"{"appinfoA":"abc"}"#.to_vec())),
-        "the body stays bytes"
-    );
-    assert_eq!(
-        event.json_data().expect("declared JSON"),
-        Some(json!({"appinfoA": "abc"}))
-    );
-    assert!(!event.extensions.contains_key("host"), "not a ce- header");
-}
-
-/// HTTP binding section 3.1.3.2: `Euro € 😀` as a header.
-#[test]
-fn an_http_header_is_percent_encoded_as_the_binding_says() {
-    let mut event = WireEvent::new("1", "/s", "t");
-    event.subject = Some("Euro € 😀".to_string());
-
-    let carried = Binding::Http.write(&event, Mode::Binary).expect("written");
-    let subject = carried
-        .headers
-        .iter()
-        .find(|(name, _)| name == "ce-subject")
-        .map(|(_, value)| value.as_str());
-
-    assert_eq!(subject, Some("Euro%20%E2%82%AC%20%F0%9F%98%80"));
-    assert_eq!(Binding::Http.read(&carried).expect("read"), event);
-}
-
-/// Kafka binding section 3.2.4, the binary-mode example.
-#[test]
-fn the_kafka_binary_example_reads() {
-    let carried = Carried {
-        content_type: Some("application/avro".to_string()),
-        headers: [
-            ("ce_specversion", "1.0"),
-            ("ce_type", "com.example.someevent"),
-            ("ce_source", "/mycontext/subcontext"),
-            ("ce_id", "1234-1234-1234"),
-            ("ce_time", "2018-04-05T03:56:24Z"),
-        ]
-        .map(|(name, value)| (name.to_string(), value.to_string()))
-        .to_vec(),
-        body: vec![0x02, 0x06],
-    };
-
-    let event = Binding::Kafka.read(&carried).expect("a WireEvent");
-
-    assert_eq!(event.kind, "com.example.someevent");
-    assert_eq!(event.data, Some(Data::Binary(vec![0x02, 0x06])));
-    assert!(
-        Binding::Http.read(&carried).is_err(),
-        "ce_ is Kafka's, not HTTP's"
-    );
-}
-
-/// AMQP binding section 3.1.4, the binary-mode example, and the prefix
-/// before 1.0.2.
-#[test]
-fn the_amqp_binary_example_reads_with_either_prefix() {
-    for prefix in ["cloudEvents_", "cloudEvents:"] {
-        let carried = Carried {
-            content_type: Some("application/json; charset=utf-8".to_string()),
-            headers: [
-                ("specversion", "1.0"),
-                ("type", "com.example.someevent"),
-                ("time", "2018-04-05T03:56:24Z"),
-                ("id", "1234-1234-1234"),
-                ("source", "/mycontext/subcontext"),
-            ]
-            .map(|(name, value)| (format!("{prefix}{name}"), value.to_string()))
-            .to_vec(),
-            body: b"{}".to_vec(),
-        };
-
-        let event = Binding::Amqp.read(&carried).expect("a WireEvent");
-
-        assert_eq!(event.id, "1234-1234-1234", "{prefix}");
-    }
-}
-
-#[test]
-fn a_message_without_specversion_is_no_wire_event() {
+fn a_message_without_specversion_or_a_batch_is_no_wire_event() {
     let carried = Carried {
         content_type: Some("text/plain".to_string()),
-        headers: vec![("ce-id".to_string(), "1".to_string())],
+        headers: vec![("ev-id".to_string(), "1".to_string())],
         body: b"hello".to_vec(),
     };
 
-    assert!(Binding::Http.read(&carried).is_err());
+    assert!(Plain.read(&carried).is_err());
     let batch = Carried {
         content_type: Some("application/cloudevents-batch+json".to_string()),
         ..Carried::default()
     };
-    assert!(Binding::Http.read(&batch).is_err());
+    assert!(Plain.read(&batch).is_err());
 }
 
 #[test]
-fn an_xmip_event_rides_every_binding_in_both_modes_and_comes_back_itself() {
+fn an_xmip_event_rides_both_modes_whatever_the_rules_and_comes_back_itself() {
     let scope = format!(
         "{}/send/billing",
         configure::fixture::test_cluster().node_scope(0)
@@ -334,17 +310,17 @@ fn an_xmip_event_rides_every_binding_in_both_modes_and_comes_back_itself() {
         .of_message(MessageId::new(12))
         .at_endpoint("https://billing.example/in")
         .by_module("xmip-core-transport-http")
-        .on_artifact("billing")
+        .on_artifact("billing east")
         .about(PartyId::new(13))
         .saying("status", "503");
     let wire_event = WireEvent::from_event(&event);
 
     assert_eq!(wire_event.kind, "se.xmip.send.failure");
     assert_eq!(wire_event.source, scope);
-    assert_eq!(wire_event.subject.as_deref(), Some("billing"));
+    assert_eq!(wire_event.subject.as_deref(), Some("billing east"));
     assert_eq!(wire_event.event().expect("an Xmip Event"), event);
 
-    for binding in [Binding::Http, Binding::Kafka, Binding::Amqp] {
+    for (rules, binding) in BINDINGS.iter().enumerate() {
         for mode in [Mode::Structured, Mode::Binary] {
             let carried = binding.write(&wire_event, mode).expect("written");
             if mode == Mode::Structured {
@@ -355,7 +331,7 @@ fn an_xmip_event_rides_every_binding_in_both_modes_and_comes_back_itself() {
             assert_eq!(
                 back.event().expect("the Event"),
                 event,
-                "{binding:?} {mode:?}"
+                "rules {rules}, {mode:?}"
             );
         }
     }
