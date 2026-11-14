@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-//! The Xmip Event, the one subscription rule, and its delivery — in this
-//! process and over the wire (runtime-model section 17, ADR-0065).
+//! The Xmip Event, its taxonomy, the one subscription rule, and the form
+//! it travels in between processes (runtime-model section 17, ADR-0065).
 //!
 //! **Routing** asks where a Message continues; **Eventing** asks who may
 //! know that an action completed, and what they may receive. Every
@@ -9,46 +9,24 @@
 //! every [`outcome::Outcome`]. A program subscribes with a
 //! [`filter::Filter`] — by type, outcome, scope and Party — and
 //! [`filter::Filter::matches`] is the one rule that decides what it gets.
-//! A subscriber is a Party ([`subscriber::Subscriber`]) whom the
-//! authorization gate admits or refuses; the in-process [`hub::Hub`] fans
-//! an Event out through a bounded queue per subscription and never waits
-//! for one; a [`listener::Listener`] calls back instead of being drained.
 //!
 //! Over the wire an Event is a [`wire::WireEvent`] (its JSON format in
-//! [`json_format`]),
-//! carried in either mode of the HTTP, Kafka or AMQP binding
-//! ([`binding::Binding`]) by Xmip's own transport of that name, at least
-//! once ([`forward::Forwarder`]). Its data is bytes unless its
-//! `datacontenttype` declares JSON (ADR-0038). Every
-//! subscription, delivery and refusal is audited (ADR-0062).
+//! [`json_format`]), carried in either mode of the HTTP, Kafka or AMQP
+//! binding ([`binding::Binding`]) by Xmip's own transport of that name,
+//! each a [`wire::Wire`]. Its data is bytes unless its `datacontenttype`
+//! declares JSON (ADR-0038).
 //!
-//! The C boundary is `xmip_operate.h` section 11, forwarded by the
-//! runtime's library to [`hub::Hub::process`]; every language binds that.
-//!
-//! Any node is the cluster's door: [`cluster::Cluster`] links a node's hub
-//! to every other member, so a subscriber on any node hears the matching
-//! Events of all of them, each crossing one hop, once, only where a filter
-//! wants it (ADR-0065, amendment 2026-10-02).
-//!
-//! An operator lists what a hub holds ([`hub::Hub::standing`]) and pauses,
-//! resumes or removes an Event subscription ([`hub::Hub::act`], by
-//! `observe::Act`); a surface that reads a node's publication only leaves
-//! the act as an `observe::Order` for the node to take (ADR-0065, amendment
-//! 2026-09-29).
+//! This crate says what an Event is and runs nothing. Delivering one — the
+//! hub every subscriber is admitted to, the subscriber and its gate, an
+//! operator's acts, the forwarder carrying a subscription over a
+//! [`wire::Wire`] at least once, and the Event link between nodes — is
+//! `xmip-core-cluster`'s, behind its feature `delivery` (ADR-0065,
+//! amendment 2026-11-13).
 
-pub mod act;
-mod audit_trail;
 pub mod binding;
-pub mod cluster;
 pub mod filter;
-pub mod forward;
-pub mod gate;
-pub mod hub;
 pub mod json_format;
-pub mod listener;
 pub mod outcome;
-mod queue;
-pub mod subscriber;
 pub mod wire;
 
 use std::collections::BTreeMap;
