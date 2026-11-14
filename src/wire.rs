@@ -9,13 +9,16 @@
 //! `specversion`, a missing or empty required attribute, an extension name
 //! outside `a-z0-9`. The JSON event format is `json_format.rs`'s; how a
 //! protocol carries one is `binding.rs`'s; what an Xmip Event becomes is
-//! [`WireEvent::from_event`]'s.
+//! [`WireEvent::from_event`]'s; what a transport implements to carry one
+//! to a Party is [`Wire`].
 
 use std::collections::BTreeMap;
 
 use codec::civil::{read_rfc3339, rfc3339_nanos};
 use serde_json::{Map, Value};
+use xcore::{Failure, PartyId};
 
+use crate::binding::Carried;
 use crate::{Event, EventError};
 
 /// The one version this reads and writes.
@@ -271,7 +274,7 @@ impl WireEvent {
         event.journey = uuid("xmipjourney")?.map(xcore::JourneyId::new);
         event.message = uuid("xmipmessage")?.map(xcore::MessageId::new);
         event.stream = uuid("xmipstream")?.map(xcore::StreamId::new);
-        event.party = uuid("xmipparty")?.map(xcore::PartyId::new);
+        event.party = uuid("xmipparty")?.map(PartyId::new);
         event.endpoint = text("xmipendpoint").map(str::to_string);
         event.module = text("xmipmodule").map(str::to_string);
         event.artifact.clone_from(&self.subject);
@@ -283,6 +286,19 @@ impl WireEvent {
         }
         Ok(event)
     }
+}
+
+/// A transport that carries a `WireEvent` to a Party, as the binding wrote
+/// it: Xmip's own HTTP, Kafka and AMQP transports each implement it, and
+/// `xmip-core-cluster`'s forwarder carries a subscription through one, at
+/// least once (ADR-0065 clause 3).
+pub trait Wire: Send {
+    /// Carry `carried` to `party`, presenting the identity configured for
+    /// it; `Ok` only once the far end acknowledged it.
+    ///
+    /// # Errors
+    /// The attempt failed: retryable where trying again could change that.
+    fn carry(&self, party: PartyId, carried: &Carried) -> Result<(), Failure>;
 }
 
 /// A name the specification allows an attribute: `a-z` and `0-9` only.

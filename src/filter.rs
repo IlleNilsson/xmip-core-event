@@ -3,14 +3,14 @@
 //!
 //! A filter names Event types, outcomes, a scope and a Party. Each it leaves
 //! empty means any; each it names must hold. The scope holds when the
-//! Event happened at or beneath it, by `observe::Scope::contains` — the one
+//! Event happened at or beneath it, by `node::Scope::contains` — the one
 //! containment rule the operator boundary already forwards — so a
 //! subscription to a node sees every Location on it. The Party holds when
 //! the Event is about that Party. No binding, no transport and no surface
 //! decides this again: the C boundary, the hub and the wire all ask
 //! [`Filter::matches`].
 
-use observe::Scope;
+use node::Scope;
 use serde_json::{Value, json};
 use xcore::PartyId;
 
@@ -106,7 +106,7 @@ impl Filter {
 
 impl Filter {
     /// This filter as it travels to another node of the cluster, pushed
-    /// down so that only what it matches crosses (`cluster.rs`): JSON, the
+    /// down so that only what it matches crosses (`link.rs`): JSON, the
     /// outcomes by their words and the Party by its identifier.
     #[must_use]
     pub fn json(&self) -> Value {

@@ -16,35 +16,9 @@ be told. Delivery is not in the message path and no Message waits for it.
 
 - **The rule, once.** `filter::Filter` names Event types, outcomes, a scope
   and a Party; `Filter::matches` is the one rule every way of subscribing
-  asks. A scope matches at and beneath itself by `observe::Scope::contains`.
-- **Who may see it.** A subscriber is a Party (`subscriber::Subscriber`),
-  and the authorization gate decides, once, when it subscribes:
-  `authorize::authorize` for a Send at the scope it reaches, each Event type
-  as the Contract. Nothing configured is a refusal. A subscriber is the
-  caller a gate proved, never a Party it names: `Subscriber::proven` takes
-  the identity the authentication gate answered and the declared Party it
-  resolved to, and refuses one not proven or resolved to no Party or another
-  (ADR-0019, amendment 2026-11-11). A program in a node's own process is the
-  account the operating system names, proven by the runtime's gate and
-  resolved through that node's Parties. Its Party is then authorized by the
-  hub's gate (`gate`), the one policy list the hub is handed by
-  `Hub::authorize_by`, which the program hosting the hub takes from the
-  authorize capability (for "these Parties", `xmip-core-authorize-party`'s
-  `PartyPolicy`, which this crate's tests use); `Hub::process` admits nobody
-  until it is handed one (ADR-0065, amendment 2026-09-26). No node hands the
-  process's hub its configured policy as it starts yet, so in a program's
-  process it is that program's policy that decides (open problem 67). A
-  subscribe refused before it has a subscriber — the caller proved to be no
-  Party — is audited by `subscriber::refused` under the names the hub
-  records its own refusals with.
-- **In process.** `hub::Hub` fans an Event out to every matching
-  subscription through a bounded queue each and never waits for a
-  subscriber: a full queue refuses the Event for that subscriber and counts
-  it. `EventSubscription::next` waits for the first Event and wakes on arrival;
-  `EventSubscription::listen` calls back on a thread of its own instead.
-  `Hub::process` is the process's hub, and `xmip_operate.h` section 11 is
-  its C boundary, forwarded by the runtime's library and bound by C, C++,
-  .NET, Java and Python (`xmip-core-abi`).
+  asks. A scope matches at and beneath itself by `node::Scope::contains`.
+  `Filter::reach` is the scope the authorization gate is asked about, and
+  `Filter::said` what a surface lists a subscription by.
 - **Over the wire.** `wire::WireEvent` is an Event as it travels,
   `json_format` its JSON format; `binding::Binding` writes and reads it in
   either mode of the HTTP, Kafka and AMQP protocol bindings (1.0.2). The
@@ -55,83 +29,19 @@ be told. Delivery is not in the message path and no Message waits for it.
   `+json`) is `data` as JSON, text under another type is `data` as a
   string, and bytes otherwise are `data_base64`. `WireEvent::json_data`
   is the one place data is read as JSON, and only where the type declares
-  it; bytes declared JSON that are not are refused. `forward::Forwarder`
-  carries a subscription's Events through a `forward::Wire` — Xmip's own
-  http, kafka and amqp transports each implement one — at least once, in
-  order, each attempt judged by the resilience guards.
-- **Operated.** `Hub::standing` lists each open Event subscription as the
-  `observe::EventSubscription` a node publishes — node and number,
-  subscriber, what it asks for (`Filter::said`), state and its queue's
-  counts — and `Hub::act` pauses, resumes or removes one (`observe::Act`,
-  whose words are written once for every noun an operator acts on): paused,
-  it keeps queuing up to its capacity and hands nothing over; resumed, it
-  hands over what queued; removed, it is closed and its holder finds it so.
-  Each act is audited in the subscriber's audit with who took it. A surface
-  that reads a node only through its publication leaves the act as an
-  `observe::Order` where the publication says, and the node takes it
-  (ADR-0065, amendment 2026-09-29). The handle a subscriber holds is
-  `hub::EventSubscription`, so no identifier here reads as a Subscription,
-  which picks a published Message up (ADR-0013, amendment 2026-09-30).
-- **Any node is the cluster's door** (ADR-0065, amendments 2026-09-26 and
-  2026-10-02; `cluster`). A subscriber on whichever node it reaches hears
-  the matching Events of every node in the cluster. Connecting to a node
-  where its Events are raised saves the one hop they would cross; it is a
-  choice, never required (amendment 2026-10-12). `cluster::Cluster::join`
-  puts a hub's node in the cluster: its sync listener (ADR-0067) answers the
-  other members with this node's own Events, and it holds one link to each
-  other member, over Xmip's mutual
-  TLS (ADR-0063, `tls::duplex`), pushing its subscriptions' filters down so
-  only what they match crosses — nothing while there are none (`cluster::link`, agreed as `xmip-event/1`).
-  A member answers from its own Events only, so an Event crosses at most
-  one hop, once, and never comes back; it is pushed the moment it is
-  raised. The Party is authorized where it subscribed; a link presents the
-  node's certificate and is authorized as a node. A subscribe returns once
-  every member that can be reached carries its filter. Which nodes are
-  members, and where they listen, is `cluster::Membership`'s — Xmip
-  Storage's administration database in a node — read again by
-  `Cluster::follow` and every `follow_every`; a member joining is linked, one
-  leaving unlinked. A member that is down is tried again on its own link's
-  thread, sooner first and then once a second, and until it is heard again
-  it is unheard, and nothing missing is silent: every `Delivery` carries
-  who is unheard now — by which node, the member, since when and why, as
-  `observe::Unheard` — and a change wakes a waiting drain with no Event
-  (`unheard_changed`); `Hub::unheard` answers the same for the node's
-  publication, where every operator surface reads it as *not hearing
-  `<node>` since `<time>`: `<why>`* (`observe::Unheard::said`); and the
-  node's audit records it as `event.link`. What
-  a link's queue on the far node refused crosses as a count and is missed
-  on the subscriptions it matched. A link is the cluster's and not a
-  Party's: it is not an Event subscription, `Hub::standing` does not list it
-  and `Hub::act` does not reach it.
-- **Audited.** Every subscription, delivery, refusal and forward is recorded
-  in the subscriber's program audit (ADR-0062), handed to the audit
-  capability's keeper (`audit::keeper`) so no Event waits for a disk and
-  unsubscribing never does either; the program's next direct record — its
-  stop — is kept after them.
-- **Tests build theirs through `subscriber::fixture`**, behind the
-  `test-support` feature as `configure::fixture` is: a subscriber whose
-  caller is built proven, as a gate would answer. Only a dev-dependency
-  turns it on — this crate's own tests, through a dev-dependency on itself,
-  and the AMQP, HTTP and Kafka transports' event-wire tests — which keeps a
-  test's helper out of a node's build. It guards nothing:
-  `Subscriber::proven` and a proven `context::AuthenticatedIdentity` are
-  public, so any code linked into a process can build one, and what proves
-  a program's subscriber is the runtime's gate (ADR-0019, amendment
-  2026-11-11).
+  it; bytes declared JSON that are not are refused. `wire::Wire` is what
+  a transport implements to carry one to a Party, presenting the identity
+  the Send side configured for it — Xmip's own http, kafka and amqp
+  transports each do (`src/event_wire.rs` in each).
 
-## Near real time
-
-The owner, 2026-09-26: an Event reaches an in-process subscriber within
-about a millisecond of being published. The module's timing program,
-`tests/measured`, run after the other tests alone and one test at a time
-(`doc/governance/rust-style.md` section 5c), holds it: `latency.rs`
-measures publish to receipt, drained and called back, and asserts it;
-`cluster_latency.rs` what crossing to another node adds; `hub.rs` what a
-publish costs the publisher; `act.rs` how soon a resume wakes a waiting
-drain. Measured on the owner's
-Windows machine, release build: a publish to one matching subscription
-about 0.7 µs, to a hundred about 15 µs; publish to receipt a median of
-about 40 µs and a 99th percentile under 100 µs.
+This crate is Foundation: what an Event is, true whether or not anything
+runs, depending on `xmip-core`, `xmip-core-node` and
+`xmip-core-library-codec` alone (ADR-0058 clause 3). Delivering it is
+`xmip-core-cluster`'s, behind its feature `delivery` (ADR-0065, amendment
+2026-11-13): the hub every subscriber is admitted to and every Event is
+published through, the subscriber and its gate, an operator's acts, the
+forwarder that carries a subscription over a `wire::Wire` at least once,
+and the Event link's conversation between nodes.
 
 `doc/architecture/runtime-model.md` section 17, *Eventing*, governs it, and
 ADR-0065 decides it; `architecture.toml` carries the maturity.
