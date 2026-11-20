@@ -109,7 +109,7 @@ pub trait Rules {
         Ok(Carried {
             content_type: event.data_content_type.clone(),
             headers,
-            body: event.data.as_ref().map(Data::bytes).unwrap_or_default(),
+            body: event.data.as_ref().map_or_default(Data::bytes),
         })
     }
 
