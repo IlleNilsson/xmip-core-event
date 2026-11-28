@@ -8,19 +8,19 @@ description = "The Xmip Event, its taxonomy, the one subscription rule, and the 
 
 [dependencies]
 # uuid-v7: an Event's identity is minted here by xmip-core's one generator.
-xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main", features = ["uuid-v7"] }
+xcore = { workspace = true, features = ["uuid-v7"] }
 # The action an Event reports is a stage of the message path, node::Stage,
 # and whether one scope lies beneath another is node::Scope's, once.
-node = { package = "xmip-core-node", git = "https://github.com/IlleNilsson/xmip-core-node", branch = "main" }
+node = { workspace = true }
 # RFC 3339 for an Event's time and base64 for binary data: codec's.
-codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
+codec = { workspace = true }
 # The wire event's JSON format, read and written as the estate reads JSON.
 serde_json = "1"
 
 [dev-dependencies]
 # The test cluster's names, from its `cluster.xmip` (`configure::fixture`;
 # ADR-0056, amendment 2026-10-03): no test writes a cluster or node name.
-configure = { package = "xmip-core-configure", git = "https://github.com/IlleNilsson/xmip-core-configure", branch = "main", features = ["test-support"] }
+configure = { workspace = true, features = ["test-support"] }
 
 [lints]
 workspace = true
